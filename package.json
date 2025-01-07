@@ -1,0 +1,11 @@
+{
+    "name": "docker-puppeteer-fastify",
+    "version": "1.0.0",
+    "scripts": {
+      "start": "node index.js"
+    },
+    "dependencies": {
+    "fastify": "^4.19.0",
+    "puppeteer": "^19.7.5"
+  }
+}
