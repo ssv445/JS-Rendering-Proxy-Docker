@@ -14,7 +14,11 @@ fastify.get('/', async (request, reply) => {
 
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2' });
+    await page.goto(url, { 
+      waitUntil: ['networkidle2', 'domcontentloaded', 'load'],
+      timeout: 30000 // 30 seconds timeout
+    });
+    
     const html = await page.content();
     return html;
   } catch (err) {
