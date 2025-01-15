@@ -57,13 +57,30 @@ fastify.get('/render', async (request, reply) => {
     const currentBrowser = await getBrowser();
     page = await currentBrowser.newPage();
     
-    // Block unwanted resources
+    // Track initial request
+    let initialResponse = null;
+    let isRedirected = false;
+
+    // Block unwanted resources and handle redirects
     await page.setRequestInterception(true);
     page.on('request', request => {
+      if (request.isNavigationRequest() && request.redirectChain().length > 0) {
+        // This is a redirect, capture it and abort
+        isRedirected = true;
+        request.abort();
+        return;
+      }
+
       if (BLOCKED_RESOURCES.has(request.resourceType())) {
         request.abort();
       } else {
         request.continue();
+      }
+    });
+
+    page.on('response', response => {
+      if (response.url() === url) {
+        initialResponse = response;
       }
     });
 
@@ -74,19 +91,26 @@ fastify.get('/render', async (request, reply) => {
     const response = await page.goto(url, {
       waitUntil: ['networkidle2', 'domcontentloaded', 'load'],
       timeout: 30000 // 30 second timeout
+    }).catch(error => {
+      // If we aborted due to redirect, return the initial response
+      if (isRedirected && initialResponse) {
+        return initialResponse;
+      }
+      throw error;
     });
 
+    const responseHeaders = response.headers();
+    const status = response.status();
+
     // Handle redirects
-    if (response.status() >= 300 && response.status() < 400) {
-      const headers = response.headers();
+    if (status >= 300 && status < 400 || isRedirected) {
       return reply
-        .code(response.status())
-        .headers(headers)
+        .code(status)
+        .headers(responseHeaders)
         .send();
     }
 
     const html = await page.content();
-    const responseHeaders = response.headers();
 
     // Set response headers
     Object.entries(responseHeaders).forEach(([key, value]) => {
@@ -97,7 +121,7 @@ fastify.get('/render', async (request, reply) => {
     });
 
     return {
-      status: response.status(),
+      status,
       headers: responseHeaders,
       html
     };
