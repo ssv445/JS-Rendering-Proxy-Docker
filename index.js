@@ -27,6 +27,30 @@ async function getBrowser() {
   return browser;
 }
 
+function prepareResponse(reply, response, html = null) {
+  const status = response.status();
+  const headers = response.headers();
+
+  // Set response headers, excluding ones that shouldn't be proxied
+  Object.entries(headers).forEach(([key, value]) => {
+    if (!['set-cookie', 'transfer-encoding'].includes(key.toLowerCase())) {
+      reply.header(key, value);
+    }
+  });
+
+  // For redirects and errors, send only status and headers
+  if (status >= 300 && status < 400 || !html) {
+    return reply.code(status).headers(headers).send();
+  }
+
+  // For successful responses, include the HTML
+  return reply.code(status).send({
+    status,
+    headers,
+    html
+  });
+}
+
 // Initialize browser on startup
 getBrowser().catch(error => {
   console.error('Failed to initialize browser:', error);
@@ -99,32 +123,14 @@ fastify.get('/render', async (request, reply) => {
       throw error;
     });
 
-    const responseHeaders = response.headers();
-    const status = response.status();
-
-    // Handle redirects
-    if (status >= 300 && status < 400 || isRedirected) {
-      return reply
-        .code(status)
-        .headers(responseHeaders)
-        .send();
+    // For redirects, send response without HTML
+    if (isRedirected || response.status() >= 300 && response.status() < 400) {
+      return prepareResponse(reply, response);
     }
 
+    // For successful responses, include rendered HTML
     const html = await page.content();
-
-    // Set response headers
-    Object.entries(responseHeaders).forEach(([key, value]) => {
-      // Skip headers that shouldn't be proxied
-      if (!['set-cookie', 'transfer-encoding'].includes(key.toLowerCase())) {
-        reply.header(key, value);
-      }
-    });
-
-    return {
-      status,
-      headers: responseHeaders,
-      html
-    };
+    return prepareResponse(reply, response, html);
 
   } catch (error) {
     if (error.name === 'TimeoutError') {
