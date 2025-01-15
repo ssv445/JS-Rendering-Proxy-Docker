@@ -1,4 +1,4 @@
-FROM node:18-slim
+FROM node:18-bookworm
 
 # Install required dependencies for Puppeteer
 RUN apt-get update && \
