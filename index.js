@@ -1,12 +1,8 @@
 const fastify = require('fastify')();
 const puppeteer = require('puppeteer');
-const pQueue = require('p-queue').default;
 const isValidUrl = require('is-valid-http-url');
 const isPrivateIP = require('is-private-ip');
 const { URL } = require('url');
-
-// Create a queue with concurrency limit of 5
-const queue = new pQueue({ concurrency: 5 });
 
 // Resource types to block
 const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
@@ -30,71 +26,69 @@ fastify.get('/render', async (request, reply) => {
     return reply.code(400).send({ error: 'Invalid URL format' });
   }
 
+  let browser;
   try {
-    // Queue the request
-    return await queue.add(async () => {
-      const browser = await puppeteer.launch({
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      });
+    browser = await puppeteer.launch({
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
 
-      const page = await browser.newPage();
-      
-      // Block unwanted resources
-      await page.setRequestInterception(true);
-      page.on('request', request => {
-        if (BLOCKED_RESOURCES.has(request.resourceType())) {
-          request.abort();
-        } else {
-          request.continue();
-        }
-      });
-
-      // Set request headers
-      await page.setExtraHTTPHeaders(request.headers);
-
-      // Navigate with timeout
-      const response = await page.goto(url, {
-        waitUntil: ['networkidle2', 'domcontentloaded', 'load'],
-        timeout: 30000 // 30 second timeout
-      });
-
-      // Handle redirects
-      if (response.status() >= 300 && response.status() < 400) {
-        const headers = response.headers();
-        await browser.close();
-        return reply
-          .code(response.status())
-          .headers(headers)
-          .send();
+    const page = await browser.newPage();
+    
+    // Block unwanted resources
+    await page.setRequestInterception(true);
+    page.on('request', request => {
+      if (BLOCKED_RESOURCES.has(request.resourceType())) {
+        request.abort();
+      } else {
+        request.continue();
       }
+    });
 
-      const html = await page.content();
-      const responseHeaders = response.headers();
+    // Set request headers
+    await page.setExtraHTTPHeaders(request.headers);
 
-      await browser.close();
+    // Navigate with timeout
+    const response = await page.goto(url, {
+      waitUntil: ['networkidle2', 'domcontentloaded', 'load'],
+      timeout: 30000 // 30 second timeout
+    });
 
-      // Set response headers
-      Object.entries(responseHeaders).forEach(([key, value]) => {
-        // Skip headers that shouldn't be proxied
-        if (!['set-cookie', 'transfer-encoding'].includes(key.toLowerCase())) {
-          reply.header(key, value);
-        }
-      });
+    // Handle redirects
+    if (response.status() >= 300 && response.status() < 400) {
+      const headers = response.headers();
+      return reply
+        .code(response.status())
+        .headers(headers)
+        .send();
+    }
 
-      return {
-        status: response.status(),
-        headers: responseHeaders,
-        html
-      };
+    const html = await page.content();
+    const responseHeaders = response.headers();
 
-    }, { timeout: 45000 }); // Queue timeout slightly longer than navigation timeout
+    // Set response headers
+    Object.entries(responseHeaders).forEach(([key, value]) => {
+      // Skip headers that shouldn't be proxied
+      if (!['set-cookie', 'transfer-encoding'].includes(key.toLowerCase())) {
+        reply.header(key, value);
+      }
+    });
+
+    return {
+      status: response.status(),
+      headers: responseHeaders,
+      html
+    };
 
   } catch (error) {
     if (error.name === 'TimeoutError') {
       return reply.code(504).send({ error: 'Gateway Timeout' });
     }
     return reply.code(500).send({ error: error.message });
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
 });
 
