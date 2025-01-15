@@ -6,6 +6,9 @@
     },
     "dependencies": {
     "fastify": "^4.19.0",
-    "puppeteer": "^19.7.5"
+    "puppeteer": "^19.7.5",
+    "p-queue": "^7.3.4",
+    "is-valid-http-url": "^1.0.3",
+    "is-private-ip": "^2.0.0"
   }
 }

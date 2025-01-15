@@ -1,38 +1,108 @@
-const fastify = require('fastify')({ logger: true });
+const fastify = require('fastify')();
 const puppeteer = require('puppeteer');
+const pQueue = require('p-queue').default;
+const isValidUrl = require('is-valid-http-url');
+const isPrivateIP = require('is-private-ip');
+const { URL } = require('url');
 
-fastify.get('/', async (request, reply) => {
+// Create a queue with concurrency limit of 5
+const queue = new pQueue({ concurrency: 5 });
+
+// Resource types to block
+const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
+
+fastify.get('/render', async (request, reply) => {
   const url = request.query.url;
-  if (!url) {
-    return reply.status(400).send('Missing ?url=');
+  
+  // URL validation
+  if (!url || !isValidUrl(url)) {
+    return reply.code(400).send({ error: 'Invalid URL provided' });
   }
 
-  const browser = await puppeteer.launch({
-    headless: 'new', // or true/false depending on your Puppeteer version
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
+  // SSRF protection
+  try {
+    const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname;
+    if (await isPrivateIP(hostname)) {
+      return reply.code(403).send({ error: 'Access to internal URLs is forbidden' });
+    }
+  } catch (error) {
+    return reply.code(400).send({ error: 'Invalid URL format' });
+  }
 
   try {
-    const page = await browser.newPage();
-    await page.goto(url, { 
-      waitUntil: ['networkidle2', 'domcontentloaded', 'load'],
-      timeout: 30000 // 30 seconds timeout
-    });
-    
-    const html = await page.content();
-    return html;
-  } catch (err) {
-    console.error(err);
-    return reply.status(500).send('Something went wrong');
-  } finally {
-    await browser.close();
+    // Queue the request
+    return await queue.add(async () => {
+      const browser = await puppeteer.launch({
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+
+      const page = await browser.newPage();
+      
+      // Block unwanted resources
+      await page.setRequestInterception(true);
+      page.on('request', request => {
+        if (BLOCKED_RESOURCES.has(request.resourceType())) {
+          request.abort();
+        } else {
+          request.continue();
+        }
+      });
+
+      // Set request headers
+      await page.setExtraHTTPHeaders(request.headers);
+
+      // Navigate with timeout
+      const response = await page.goto(url, {
+        waitUntil: ['networkidle2', 'domcontentloaded', 'load'],
+        timeout: 30000 // 30 second timeout
+      });
+
+      // Handle redirects
+      if (response.status() >= 300 && response.status() < 400) {
+        const headers = response.headers();
+        await browser.close();
+        return reply
+          .code(response.status())
+          .headers(headers)
+          .send();
+      }
+
+      const html = await page.content();
+      const responseHeaders = response.headers();
+
+      await browser.close();
+
+      // Set response headers
+      Object.entries(responseHeaders).forEach(([key, value]) => {
+        // Skip headers that shouldn't be proxied
+        if (!['set-cookie', 'transfer-encoding'].includes(key.toLowerCase())) {
+          reply.header(key, value);
+        }
+      });
+
+      return {
+        status: response.status(),
+        headers: responseHeaders,
+        html
+      };
+
+    }, { timeout: 45000 }); // Queue timeout slightly longer than navigation timeout
+
+  } catch (error) {
+    if (error.name === 'TimeoutError') {
+      return reply.code(504).send({ error: 'Gateway Timeout' });
+    }
+    return reply.code(500).send({ error: error.message });
   }
 });
 
 fastify.listen({ port: 3000, host: '0.0.0.0' }, (err) => {
   if (err) {
+    console.error(err);
     fastify.log.error(err);
     process.exit(1);
   }
-  console.log(`Server running on http://0.0.0.0:3000`);
+  console.log('Server running on port 3000');
 });

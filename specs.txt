@@ -1,0 +1,109 @@
+SPECIFICATION FOR A PUPPETEER-BASED RENDERING PROXY (WITH 5-CONCURRENT-REQUEST LIMIT)
+
+--------------------------------------------------------------------------------
+1. ENDPOINT SPECIFICATION
+--------------------------------------------------------------------------------
+- Endpoint: GET /render
+  - Query Param: ?url=<URL> – The target page to render.
+  - Response:
+    - Status Code:
+      - 2xx for successful, non-redirect responses.
+      - 3xx if the upstream server issues a redirect (and we do NOT follow it).
+      - 4xx or 5xx for errors (e.g., invalid URL, server error).
+    - Headers:
+      - Mimic or pass along upstream headers needed for an HTML response.
+    - Body:
+      - For 2xx responses, return the rendered HTML (with images/videos blocked).
+      - For 3xx responses, typically just the "Location" header (no HTML).
+
+--------------------------------------------------------------------------------
+2. REQUEST PARAMETERS & VALIDATION
+--------------------------------------------------------------------------------
+1) Required:
+   - url – Must be a valid HTTP/HTTPS URL (no file://, internal IPs, etc.).
+
+2) Optional:
+   - viewport – Page width/height for rendering.
+   - waitUntil – When to consider the page “ready” (e.g., networkidle2).
+   - cacheAssets – Whether CSS/JS should be cached briefly.
+
+3) Security:
+   - Block private/internal IP ranges to avoid SSRF.
+   - Consider an allowlist or other policy if required.
+   - Possibly require API keys or other auth.
+
+--------------------------------------------------------------------------------
+3. KEY REQUIREMENTS
+--------------------------------------------------------------------------------
+1) Block Media
+   - Images, videos, and fonts should be aborted or never loaded.
+
+2) No HTML Caching
+   - Always fetch a fresh HTML response each time.
+   - CSS/JS can be cached for a short TTL (e.g., a few minutes).
+
+3) No Redirect Following
+   - If the upstream server returns a 3xx, respond with that status and headers
+     directly.
+   - Do NOT continue navigation on redirects.
+
+4) Simulate Standard HTTP Proxy
+   - Forward or replicate relevant headers.
+   - Return the correct status code and body to mirror upstream response.
+
+--------------------------------------------------------------------------------
+4. CONCURRENCY LIMIT: 5 REQUESTS
+--------------------------------------------------------------------------------
+1) Browser Pool / Concurrency Model
+   - Maintain a pool of browser tabs or a queue so that no more than 5 requests
+     are processed at once.
+   - If the limit is reached, either queue new requests until a slot is free
+     or return 503 Service Unavailable or 429 Too Many Requests.
+
+2) Timeout & Resource Management
+   - Use a navigation timeout (e.g., 10 seconds).
+   - Clean up each tab after the request completes or fails.
+
+--------------------------------------------------------------------------------
+5. IMPLEMENTATION DETAILS & CORNER CASES
+--------------------------------------------------------------------------------
+1) Resource Interception
+   - Use Puppeteer’s request interception to block images, videos, fonts.
+   - Allow CSS/JS (and cache them if cacheAssets is enabled).
+
+2) Error Handling
+   - Timeout -> 504 Gateway Timeout.
+   - Invalid URL -> 400 Bad Request or 404 Not Found.
+   - Puppeteer Crash -> 500 Internal Server Error.
+
+3) Header Handling
+   - Preserve or pass along necessary upstream headers like Content-Type.
+   - Potentially strip Set-Cookie, security headers, etc., that might not apply.
+
+4) Performance Optimization
+   - Wait until domcontentloaded or networkidle2 before capturing HTML.
+   - Limit JS execution if you don’t need it.
+
+5) Security
+   - Use HTTPS for your proxy itself.
+   - Validate or sanitize request parameters carefully.
+
+--------------------------------------------------------------------------------
+6. EXAMPLE FLOW
+--------------------------------------------------------------------------------
+1) Client: GET /render?url=https://example.com
+2) Validation:
+   - Check URL format and concurrency limit.
+   - If valid and a slot is open, proceed; otherwise queue or return 503/429.
+3) Navigation:
+   - Start Puppeteer navigation with request interception.
+   - If the response is 3xx, immediately return that status + Location header.
+   - If 2xx, block media resources, allow CSS/JS, use caching if enabled.
+   - Gather final HTML.
+4) Response:
+   - For 2xx, return the upstream-like status, headers, and the HTML body.
+   - For 3xx, return the upstream-like status, headers (Location), no HTML.
+   - For errors, return the appropriate error status code.
+5) Cleanup:
+   - Close or recycle the Puppeteer tab.
+   - Release concurrency slot.
