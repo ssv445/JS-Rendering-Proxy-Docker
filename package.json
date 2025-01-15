@@ -2,12 +2,17 @@
     "name": "docker-puppeteer-fastify",
     "version": "1.0.0",
     "scripts": {
-      "start": "node index.js"
+      "start": "node index.js",
+      "test:server": "node test/mockServer.js",
+      "test": "node test/proxyTest.js"
     },
     "dependencies": {
       "fastify": "^4.19.0",
       "puppeteer": "^19.7.5",
       "is-valid-http-url": "^1.0.3",
       "is-private-ip": "^2.0.0"
+    },
+    "devDependencies": {
+      "axios": "^1.4.0"
     }
 }
