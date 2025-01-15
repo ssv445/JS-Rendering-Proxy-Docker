@@ -10,10 +10,11 @@ const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
 // Browser management
 let browserInstance = null;
 let requestCount = 0;
-const REQUEST_LIMIT = 30;
+const PAGE_LIMIT_PER_BROWSER_INSTANCE = 30;
+const PAGE_TIMEOUT_MS = 30000;
 
 async function getBrowser() {
-  if (!browserInstance || requestCount >= REQUEST_LIMIT) {
+  if (!browserInstance || requestCount >= PAGE_LIMIT_PER_BROWSER_INSTANCE) {
     if (browserInstance) {
       await browserInstance.close();
     }
@@ -130,7 +131,7 @@ fastify.get('/render', async (request, reply) => {
     // Navigate with timeout
     const response = await page.goto(url, {
       waitUntil: ['networkidle2', 'domcontentloaded', 'load'],
-      timeout: 30000 // 30 second timeout
+      timeout: PAGE_TIMEOUT_MS
     }).catch(error => {
       // If we aborted due to redirect, return the initial response
       if (isRedirected && initialResponse) {
