@@ -74,9 +74,8 @@ getBrowser().catch(error => {
   process.exit(1);
 });
 
-fastify.get('/render', async (request, reply) => {
-  const url = request.query.url;
-  
+// Block unsafe URLs, private IPs, and invalid URLs
+const blockUnsafeUrls = async (url, reply) => {
   // URL validation
   if (!url || !isValidUrl(url)) {
     return reply.code(400).send({ error: 'Invalid URL provided' });
@@ -91,7 +90,13 @@ fastify.get('/render', async (request, reply) => {
     }
   } catch (error) {
     return reply.code(400).send({ error: 'Invalid URL format' });
-  }
+    }
+}
+
+fastify.get('/render', async (request, reply) => {
+  const url = request.query.url;
+
+  await blockUnsafeUrls(url, reply);
 
   let page;
   try {
