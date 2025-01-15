@@ -7,6 +7,32 @@ const { URL } = require('url');
 // Resource types to block
 const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
 
+// Browser management
+let browser = null;
+let requestCount = 0;
+const REQUEST_LIMIT = 30;
+
+async function getBrowser() {
+  if (!browser || requestCount >= REQUEST_LIMIT) {
+    if (browser) {
+      await browser.close();
+    }
+    browser = await puppeteer.launch({
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    requestCount = 0;
+  }
+  requestCount++;
+  return browser;
+}
+
+// Initialize browser on startup
+getBrowser().catch(error => {
+  console.error('Failed to initialize browser:', error);
+  process.exit(1);
+});
+
 fastify.get('/render', async (request, reply) => {
   const url = request.query.url;
   
@@ -26,14 +52,10 @@ fastify.get('/render', async (request, reply) => {
     return reply.code(400).send({ error: 'Invalid URL format' });
   }
 
-  let browser;
+  let page;
   try {
-    browser = await puppeteer.launch({
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-
-    const page = await browser.newPage();
+    const currentBrowser = await getBrowser();
+    page = await currentBrowser.newPage();
     
     // Block unwanted resources
     await page.setRequestInterception(true);
@@ -85,11 +107,22 @@ fastify.get('/render', async (request, reply) => {
       return reply.code(504).send({ error: 'Gateway Timeout' });
     }
     return reply.code(500).send({ error: error.message });
-  } finally {
-    if (browser) {
-      await browser.close();
-    }
   }
+});
+
+// Cleanup on shutdown
+process.on('SIGINT', async () => {
+  if (browser) {
+    await browser.close();
+  }
+  process.exit();
+});
+
+process.on('SIGTERM', async () => {
+  if (browser) {
+    await browser.close();
+  }
+  process.exit();
 });
 
 fastify.listen({ port: 3000, host: '0.0.0.0' }, (err) => {
