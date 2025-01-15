@@ -8,24 +8,40 @@ const { URL } = require('url');
 const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
 
 // Browser management
-let browser = null;
+let browserInstance = null;
 let requestCount = 0;
 const REQUEST_LIMIT = 30;
 
 async function getBrowser() {
-  if (!browser || requestCount >= REQUEST_LIMIT) {
-    if (browser) {
-      await browser.close();
+  if (!browserInstance || requestCount >= REQUEST_LIMIT) {
+    if (browserInstance) {
+      await browserInstance.close();
     }
-    browser = await puppeteer.launch({
+    browserInstance = await puppeteer.launch({
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     requestCount = 0;
   }
   requestCount++;
-  return browser;
+  return browserInstance;
 }
+
+// Cleanup on shutdown
+process.on('SIGINT', async () => {
+  if (browserInstance) {
+    await browserInstance.close();
+  }
+  process.exit();
+});
+
+process.on('SIGTERM', async () => {
+  if (browserInstance) {
+    await browserInstance.close();
+  }
+  process.exit();
+});
+
 
 function prepareResponse(reply, response, html = null) {
   const status = response.status();
@@ -51,7 +67,7 @@ function prepareResponse(reply, response, html = null) {
   });
 }
 
-// Initialize browser on startup
+// Initialize browserInstance on startup
 getBrowser().catch(error => {
   console.error('Failed to initialize browser:', error);
   process.exit(1);
@@ -140,20 +156,7 @@ fastify.get('/render', async (request, reply) => {
   }
 });
 
-// Cleanup on shutdown
-process.on('SIGINT', async () => {
-  if (browser) {
-    await browser.close();
-  }
-  process.exit();
-});
 
-process.on('SIGTERM', async () => {
-  if (browser) {
-    await browser.close();
-  }
-  process.exit();
-});
 
 fastify.listen({ port: 3000, host: '0.0.0.0' }, (err) => {
   if (err) {
