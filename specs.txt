@@ -1,5 +1,4 @@
-SPECIFICATION FOR A PUPPETEER-BASED RENDERING PROXY (WITH 5-CONCURRENT-REQUEST LIMIT)
-
+SPECIFICATION FOR A PUPPETEER-BASED RENDERING PROXY
 --------------------------------------------------------------------------------
 1. ENDPOINT SPECIFICATION
 --------------------------------------------------------------------------------

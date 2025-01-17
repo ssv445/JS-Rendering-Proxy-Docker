@@ -1,6 +1,6 @@
-# Website Rendering Proxy
+# JS-Rendering-Proxy-Docker
 
-A containerized web scraping API built with Node.js, Fastify, and Puppeteer.
+A containerized web scraping Proxy API built with Node.js, Fastify, and Puppeteer.
 
 ## Why This Exists
 

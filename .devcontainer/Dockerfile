@@ -1,3 +1,4 @@
+# Use the official Node.js image for development
 FROM node:18-bookworm
 
 # Install required dependencies for Puppeteer

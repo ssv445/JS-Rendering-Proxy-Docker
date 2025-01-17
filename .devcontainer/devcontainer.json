@@ -1,11 +1,11 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/javascript-node
 {
-  "name": "dockerized-pupeteer-scraper-api",
+  "name": "js-rendering-proxy-docker",
   // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
   // "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
   "build": {
-        // Path is relative to the devcontainer.json file.
+    // Path is relative to the devcontainer.json file.
     "dockerfile": "Dockerfile"
   },
   // Features to add to the dev container. More info: https://containers.dev/features.
@@ -40,7 +40,7 @@
   // More info: https://containers.dev/implementors/json_reference/#port-attributes
   "portsAttributes": {
     "3000": {
-      "label": "Puppeteer Scraper API",
+      "label": "JS-Rendering-Proxy-Docker",
       "onAutoForward": "notify"
     }
   },

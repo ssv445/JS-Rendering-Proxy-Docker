@@ -1,5 +1,5 @@
 {
-  "name": "docker-puppeteer-fastify",
+  "name": "js-rendering-proxy-docker",
   "version": "1.0.0",
   "scripts": {
     "dev": "DEBUG=true node --watch index.js",

@@ -1,2 +1,2 @@
-docker build -t my-docker-puppeteer-fastify .
-docker run -p 3000:3000 my-docker-puppeteer-fastify
+docker build -t js-rendering-proxy-docker .
+docker run -p 3000:3000 js-rendering-proxy-docker

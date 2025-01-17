@@ -9,10 +9,7 @@
     "emmet.includeLanguages": {},
     "workbench.editor.showTabs": "single",
     "scm.diffDecorationsIgnoreTrimWhitespace": "true",
-    "cSpell.words": [
-        "directus",
-        "womo",
-    ],
+    "cSpell.words": [],
     "editor.wordWrap": "on",
     "editor.wordWrapColumn": 120,
     "editor.wrappingIndent": "indent"
