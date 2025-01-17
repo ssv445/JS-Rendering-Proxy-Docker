@@ -193,7 +193,7 @@ fastify.get('/render', async (request, reply) => {
     page.on('request', request => {
       const resourceType = request.resourceType();
       // debugLog(`Resource request: ${resourceType} - ${request.url()}`);
-      // if we already have a redirect response, abort the request
+      // if we already have a redirect response, abort all the request
       if (isRedirected) {
         request.abort();
         return;
@@ -209,9 +209,9 @@ fastify.get('/render', async (request, reply) => {
       if (BLOCKED_RESOURCES.has(resourceType)) {
         // debugLog(`Blocked resource: ${resourceType} - ${request.url()}`);
         request.abort();
-      } else {
-        request.continue();
       }
+
+      request.continue();
     });
 
     page.on('response', response => {

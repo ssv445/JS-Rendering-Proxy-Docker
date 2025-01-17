@@ -19,7 +19,7 @@ fastify.get('/success', async (request, reply) => {
 
 fastify.get('/redirect', async (request, reply) => {
   return reply
-    .code(302)
+    .code(301)
     .header('Location', 'http://localhost:3001/success')
     .send();
 });
@@ -28,6 +28,13 @@ fastify.get('/redirect-chain', async (request, reply) => {
   return reply
     .code(301)
     .header('Location', 'http://localhost:3001/redirect')
+    .send();
+});
+
+fastify.get('/redirect-404', async (request, reply) => {
+  return reply
+    .code(301)
+    .header('Location', 'http://localhost:3001/unknown')
     .send();
 });
 

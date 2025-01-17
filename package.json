@@ -1,17 +1,17 @@
 {
-    "name": "docker-puppeteer-fastify",
-    "version": "1.0.0",
-    "scripts": {
-      "dev": "DEBUG=true node --watch index.js",
-      "start": "node index.js",
-      "test:server": "node test/mockServer.js",
-      "test": "node test/proxyTest.js"
-    },
-    "dependencies": {
-      "fastify": "^4.19.0",
-      "puppeteer": "^19.7.5"
-    },
-    "devDependencies": {
-      "axios": "^1.4.0"
-    }
+  "name": "docker-puppeteer-fastify",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "DEBUG=true node --watch index.js",
+    "start": "node index.js",
+    "test:server": "DEBUG=true node --watch test/mockServer.js",
+    "test": "node test/proxyTest.js"
+  },
+  "dependencies": {
+    "fastify": "^4.19.0",
+    "puppeteer": "^19.7.5"
+  },
+  "devDependencies": {
+    "axios": "^1.4.0"
+  }
 }
