@@ -20,7 +20,7 @@ function debugLog(...args) {
 // Browser management
 let browserInstance = null;
 let requestCount = 0;
-const PAGE_LIMIT_PER_BROWSER_INSTANCE = 30;
+const PAGE_LIMIT_PER_BROWSER_INSTANCE = 1;
 const PAGE_TIMEOUT_MS = 30000;
 async function getBrowser() {
   if (!browserInstance || requestCount >= PAGE_LIMIT_PER_BROWSER_INSTANCE) {
@@ -269,7 +269,8 @@ fastify.get('/render', async (request, reply) => {
       await page.close();
       debugLog('Page closed');
     }
-    debugLog('Request processed');
+    debugLog('Request processed successfully');
+    debugLog('--------------------------------');
   }
 });
 

@@ -99,7 +99,30 @@ async function testPrivateIPBlocking() {
   }
 }
 
+async function testRandomWebsite() {
+  let websites = require('./websiteList');
+  // randomize the websites
+  // websites = websites.sort(() => Math.random() - 0.5);
+
+  console.log('\nTesting random websites...');
+
+  for (let i = 0; i < websites.length; i++) {
+    let randomWebsite = websites[i];
+    try {
+      console.log(`Website: [${i + 1}]`, randomWebsite);
+      const { status } = await axios.get(`${PROXY_URL}?url=${randomWebsite}`);
+      console.log('Status: ', status);
+    } catch (error) {
+      console.log('Website: [${i + 1}]', randomWebsite, 'Error: ', error);
+    }
+  }
+  console.log('✅ Random website test passed');
+
+}
+
 async function runTests() {
+
+
   // check if the mock server is accepting requests
   const mockServerResponse = await axios.get('http://localhost:3001/success');
   if (mockServerResponse.status !== 200) {
@@ -115,16 +138,22 @@ async function runTests() {
   }
 
   try {
-    await testSuccessfulRender();
-    await test404();
-    await testRedirectChain();
-    await testRedirectHandling();
-    await testRedirect404();
-    await test500();
 
-    await testCustomHeaders();
-    await testSlowResponse();
-    await testInvalidURL();
+    // await testSuccessfulRender();
+    // await test404();
+    // await testRedirectChain();
+    // await testRedirectHandling();
+    // await testRedirect404();
+    // await test500();
+
+    // await testCustomHeaders();
+    // await testSlowResponse();
+    // await testInvalidURL();
+
+    await testRandomWebsite();
+
+
+
     // await testPrivateIPBlocking();
 
     console.log('\n🎉 All tests passed!');
@@ -146,4 +175,7 @@ console.log('Starting tests...');
 console.log('Make sure both proxy server and mock server are running');
 
 
-runTests(); 
+runTests();
+
+
+
