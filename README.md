@@ -1,6 +1,21 @@
-# Dockerized Puppeteer Scraper API
+# Website Rendering Proxy
 
 A containerized web scraping API built with Node.js, Fastify, and Puppeteer.
+
+## Why This Exists
+
+- Traditional PHP crawlers can't process JavaScript, making them ineffective for:
+
+  - React applications
+  - Angular applications
+  - Other JavaScript-heavy sites
+  - Single-page applications (SPAs)
+
+- This proxy service:
+  - Acts as a bridge between PHP crawlers and modern web apps
+  - Returns fully rendered HTML after JavaScript execution
+  - Requires no modifications to existing crawler logic
+  - Handles client-side rendering transparently
 
 ## Features
 
@@ -53,7 +68,12 @@ The project includes a devcontainer configuration with:
 
 ## API Endpoints
 
-Coming soon...
+The only end point is render, which accepts URL to render and return HTML.
+
+```
+http://localhost:3000/render?url=[The-URL-To-Render]
+
+```
 
 ## Contributing
 
