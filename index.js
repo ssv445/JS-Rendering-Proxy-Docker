@@ -3,13 +3,9 @@ const puppeteer = require('puppeteer');
 const { URL } = require('url');
 
 // Resource types to block
-const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
+const BLOCKED_RESOURCES = new Set([]);//'image', 'media', 'font']);
 
-// Browser management
-let browserInstance = null;
-let requestCount = 0;
-const PAGE_LIMIT_PER_BROWSER_INSTANCE = 30;
-const PAGE_TIMEOUT_MS = 30000;
+
 
 // Add debug flag
 const DEBUG = process.env.DEBUG === 'true';
@@ -21,6 +17,11 @@ function debugLog(...args) {
   }
 }
 
+// Browser management
+let browserInstance = null;
+let requestCount = 0;
+const PAGE_LIMIT_PER_BROWSER_INSTANCE = 30;
+const PAGE_TIMEOUT_MS = 30000;
 async function getBrowser() {
   if (!browserInstance || requestCount >= PAGE_LIMIT_PER_BROWSER_INSTANCE) {
     debugLog(`Creating new browser instance. Previous count: ${requestCount}`);
@@ -28,6 +29,7 @@ async function getBrowser() {
       await browserInstance.close();
     }
     browserInstance = await puppeteer.launch({
+      headless: 'new', // or true/false depending on your Puppeteer version
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
@@ -86,17 +88,26 @@ getBrowser().catch(error => {
 });
 
 const isValidUrl = function(url) {
-  return url.startsWith('http://') || url.startsWith('https://');
+  try {
+    new URL(url); // This will throw if URL is invalid
+    return url.startsWith('http://') || url.startsWith('https://');
+  } catch {
+    return false;
+  }
 }
 
 // Block unsafe URLs, private IPs, and invalid URLs
 const blockUnsafeUrls = async (url, reply) => {
   // URL validation
-  if (!url || !isValidUrl(url)) {
-    reply.code(400).send({ error: 'Invalid URL provided' });
+  if (!url) {
+    reply.code(400).send({ error: 'URL parameter is required' });
     return true;
   }
   
+  if (!isValidUrl(url)) {
+    reply.code(400).send({ error: 'Invalid URL format. Must be a valid HTTP/HTTPS URL' });
+    return null;
+  }
   // // SSRF protection
   // try {
     //   const parsedUrl = new URL(url);
@@ -107,14 +118,19 @@ const blockUnsafeUrls = async (url, reply) => {
       // } catch (error) {
   //   return reply.code(400).send({ error: 'Invalid URL format' });
   // }
-  return false;
+
+  //trim url
+  url = url.trim();
+
+  return url;
 }
 
 fastify.get('/render', async (request, reply) => {
-  const url = request.query.url;
+  let url = request.query.url;
   debugLog(`Received request for URL: ${url}`);
 
-  if(await blockUnsafeUrls(url, reply)) {
+  url = await blockUnsafeUrls(url, reply);
+  if(!url) {
     debugLog('URL blocked by safety checks');
     return;
   }
