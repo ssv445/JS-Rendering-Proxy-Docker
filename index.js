@@ -66,12 +66,12 @@ function sanitizeHeaderValue(value) {
     .replace(/\r?\n|\r/g, ' ')
     // Replace tabs
     .replace(/\t/g, ' ')
-    // Replace multiple spaces with single space
-    .replace(/\s+/g, ' ')
-    // Remove non-printable characters
-    .replace(/[\x00-\x1F\x7F]/g, '')
-    // Remove potentially dangerous characters
-    .replace(/[()<>@,;:\\"/[\]?={}]/g, '')
+    // // Replace multiple spaces with single space
+    // .replace(/\s+/g, ' ')
+    // // Remove non-printable characters
+    // .replace(/[\x00-\x1F\x7F]/g, '')
+    // // Remove potentially dangerous characters
+    // .replace(/[()<>@,;:\\"/[\]?={}]/g, '')
     .trim();
 }
 

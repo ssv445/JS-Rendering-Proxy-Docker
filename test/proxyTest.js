@@ -10,13 +10,14 @@ async function runTests() {
     console.log('\nTesting successful render...');
     const successResponse = await axios.get(`${PROXY_URL}?url=http://localhost:3001/success`);
     assert.strictEqual(successResponse.status, 200);
-    assert(successResponse.data.html.includes('<h1>Success</h1>'));
+    assert(successResponse.data.includes('<h1>Success</h1>'));
     console.log('✅ Success test passed');
 
     // Test 2: Redirect handling
     console.log('\nTesting redirect handling...');
     const redirectResponse = await axios.get(`${PROXY_URL}?url=http://localhost:3001/redirect`);
     assert.strictEqual(redirectResponse.status, 302);
+    console.log(redirectResponse.data);
     assert(redirectResponse.headers.location);
     console.log('✅ Redirect test passed');
 
