@@ -1,0 +1,19 @@
+{
+    "editor.quickSuggestions": {
+        "comments": true
+    },
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true,
+    "editor.formatOnType": true,
+    "files.associations": {},
+    "emmet.includeLanguages": {},
+    "workbench.editor.showTabs": "single",
+    "scm.diffDecorationsIgnoreTrimWhitespace": "true",
+    "cSpell.words": [
+        "directus",
+        "womo",
+    ],
+    "editor.wordWrap": "on",
+    "editor.wordWrapColumn": 120,
+    "editor.wrappingIndent": "indent"
+}
