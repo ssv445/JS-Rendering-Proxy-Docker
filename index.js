@@ -69,7 +69,11 @@ function prepareResponse(reply, response, html = null) {
         // Sanitize header value by replacing newlines with spaces
         const sanitizedValue = value.replace(/\n/g, ' ').trim();
         // debugLog(`Setting header: <${key}> - <${sanitizedValue}>`);
-        reply.header(key, sanitizedValue);
+        try {
+          reply.header(key, sanitizedValue);
+        } catch (error) {
+          debugLog(`Error setting header: <${key}> - <${sanitizedValue}>`);
+        }
       }
     });
 
