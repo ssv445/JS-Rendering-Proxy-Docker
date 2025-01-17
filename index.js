@@ -58,7 +58,7 @@ process.on('SIGTERM', async () => {
 
 function sanitizeHeaderValue(value) {
   if (!value) return '';
-  
+
   return value
     // Convert to string in case of numbers/other types
     .toString()
@@ -79,6 +79,7 @@ function prepareResponse(reply, response, html = null) {
   try {
     debugLog('Preparing response');
     const status = response.status();
+    debugLog(`original status: <${status}>`);
     const headers = response.headers();
 
     // Problematic headers that should be skipped
@@ -98,6 +99,7 @@ function prepareResponse(reply, response, html = null) {
         try {
           const sanitizedValue = sanitizeHeaderValue(value);
           if (sanitizedValue) {
+            // debugLog(`Setting header: <${key}> - <${sanitizedValue}>`);
             reply.header(key, sanitizedValue);
           }
         } catch (error) {
@@ -109,13 +111,15 @@ function prepareResponse(reply, response, html = null) {
     // debugLog(`Setting status: <${status}>`);
     // debugLog(`Setting headers: <${JSON.stringify(headers)}>`);
 
-  // For redirects and errors, send only status and headers
-  if (status >= 300 && status < 400 || !html) {
-    return reply.code(status).send();
-  }
+    // For redirects and errors, send only status and headers
+    if (!html) {
+      debugLog(`For redirects and errors, sending status and headers only, status: <${status}>`);
+      return reply.code(status).send('');
+    }
 
-  // For successful responses, include the HTML
-  return reply.code(status).send(html);
+    // For successful responses, include the HTML
+    debugLog(`For successful responses, including HTML, status: <${status}>`);
+    return reply.code(status).send(html);
   } catch (error) {
     debugLog(`Error preparing response: ${error.message}`);
     throw error;
@@ -128,7 +132,7 @@ getBrowser().catch(error => {
   process.exit(1);
 });
 
-const isValidUrl = function(url) {
+const isValidUrl = function (url) {
   try {
     new URL(url); // This will throw if URL is invalid
     return url.startsWith('http://') || url.startsWith('https://');
@@ -144,19 +148,19 @@ const blockUnsafeUrls = async (url, reply) => {
     reply.code(400).send({ error: 'URL parameter is required' });
     return true;
   }
-  
+
   if (!isValidUrl(url)) {
     reply.code(400).send({ error: 'Invalid URL format. Must be a valid HTTP/HTTPS URL' });
     return null;
   }
   // // SSRF protection
   // try {
-    //   const parsedUrl = new URL(url);
-    //   const hostname = parsedUrl.hostname;
-    //   if (await isPrivateIP(hostname)) {
-      //     return reply.code(403).send({ error: 'Access to internal URLs is forbidden' });
-      //   }
-      // } catch (error) {
+  //   const parsedUrl = new URL(url);
+  //   const hostname = parsedUrl.hostname;
+  //   if (await isPrivateIP(hostname)) {
+  //     return reply.code(403).send({ error: 'Access to internal URLs is forbidden' });
+  //   }
+  // } catch (error) {
   //   return reply.code(400).send({ error: 'Invalid URL format' });
   // }
 
@@ -171,7 +175,7 @@ fastify.get('/render', async (request, reply) => {
   debugLog(`Received request for URL: ${url}`);
 
   url = await blockUnsafeUrls(url, reply);
-  if(!url) {
+  if (!url) {
     debugLog('URL blocked by safety checks');
     return;
   }
@@ -181,17 +185,22 @@ fastify.get('/render', async (request, reply) => {
     const currentBrowser = await getBrowser();
     page = await currentBrowser.newPage();
     debugLog('New page created');
-    
-    let initialResponse = null;
+
+    let redirectResponse = null;
     let isRedirected = false;
 
     await page.setRequestInterception(true);
     page.on('request', request => {
       const resourceType = request.resourceType();
       // debugLog(`Resource request: ${resourceType} - ${request.url()}`);
-      
+      // if we already have a redirect response, abort the request
+      if (isRedirected) {
+        request.abort();
+        return;
+      }
+
       if (request.isNavigationRequest() && request.redirectChain().length > 0) {
-        debugLog(`Redirect detected: ${request.url()}`);
+        debugLog(`Redirect detected: ${request.url()}, aborting...`);
         isRedirected = true;
         request.abort();
         return;
@@ -206,8 +215,10 @@ fastify.get('/render', async (request, reply) => {
     });
 
     page.on('response', response => {
-      if (response.url() === url) {
-        initialResponse = response;
+      if (response.url() === url && response.status() >= 300 && response.status() < 400) {
+        // its a redirect
+        redirectResponse = response;
+        isRedirected = true;
       }
     });
 
@@ -221,26 +232,26 @@ fastify.get('/render', async (request, reply) => {
       waitUntil: ['networkidle2', 'domcontentloaded', 'load'],
       timeout: PAGE_TIMEOUT_MS
     }).catch(error => {
-      debugLog(`Navigation error: ${error.message}`);
-      if (isRedirected && initialResponse) {
+      if (isRedirected && redirectResponse) {
         debugLog('Returning initial response for redirect');
-        return initialResponse;
+        return redirectResponse;
+      } else {
+        debugLog(`Navigation error: ${error.message}`);
+        throw error;
       }
-      throw error;
     });
 
     debugLog(`Page loaded with status: ${response.status()}`);
 
     // For redirects, send response without HTML
-    if (isRedirected || response.status() >= 300 && response.status() < 400) {
+    if (redirectResponse) {
       debugLog('Redirect detected');
-      return prepareResponse(reply, response);
+      return prepareResponse(reply, redirectResponse);
     }
 
     // For successful responses, include rendered HTML
+    debugLog('No redirect detected, sending HTML');
     const html = await page.content();
-    // debugLog(`HTML content: ${html}`);
-
     return prepareResponse(reply, response, html);
 
   } catch (error) {
@@ -250,6 +261,7 @@ fastify.get('/render', async (request, reply) => {
     }
     return reply.code(500).send({ error: error.message });
   } finally {
+    debugLog('Closing page');
     if (page) {
       await page.close();
       debugLog('Page closed');
