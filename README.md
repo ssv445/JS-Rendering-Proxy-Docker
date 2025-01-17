@@ -16,6 +16,9 @@ A containerized web scraping API built with Node.js, Fastify, and Puppeteer.
   - Returns fully rendered HTML after JavaScript execution
   - Requires no modifications to existing crawler logic
   - Handles client-side rendering transparently
+  - Does not follow redirects
+  - Returns all the HTTP errors as it is
+  - Blocks CSS and media.
 
 ## Features
 
