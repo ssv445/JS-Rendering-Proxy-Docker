@@ -58,24 +58,35 @@ process.on('SIGTERM', async () => {
 
 
 function prepareResponse(reply, response, html = null) {
-  debugLog('Preparing response');
-  const status = response.status();
-  const headers = response.headers();
+  try {
+    debugLog('Preparing response');
+    const status = response.status();
+    const headers = response.headers();
 
-  // Set response headers, excluding ones that shouldn't be proxied
-  Object.entries(headers).forEach(([key, value]) => {
-    if (!['set-cookie', 'transfer-encoding'].includes(key.toLowerCase())) {
-      reply.header(key, value);
-    }
-  });
+    // Set response headers, excluding problematic ones and sanitizing values
+    Object.entries(headers).forEach(([key, value]) => {
+      if (!['set-cookie', 'transfer-encoding'].includes(key.toLowerCase())) {
+        // Sanitize header value by replacing newlines with spaces
+        const sanitizedValue = value.replace(/\n/g, ' ').trim();
+        // debugLog(`Setting header: <${key}> - <${sanitizedValue}>`);
+        reply.header(key, sanitizedValue);
+      }
+    });
+
+    // debugLog(`Setting status: <${status}>`);
+    // debugLog(`Setting headers: <${JSON.stringify(headers)}>`);
 
   // For redirects and errors, send only status and headers
   if (status >= 300 && status < 400 || !html) {
-    return reply.code(status).headers(headers).send();
+    return reply.code(status).send();
   }
 
   // For successful responses, include the HTML
-  return reply.code(status).headers(headers).send(html);
+  return reply.code(status).send(html);
+  } catch (error) {
+    debugLog(`Error preparing response: ${error.message}`);
+    throw error;
+  }
 }
 
 // Initialize browserInstance on startup
@@ -144,7 +155,7 @@ fastify.get('/render', async (request, reply) => {
     await page.setRequestInterception(true);
     page.on('request', request => {
       const resourceType = request.resourceType();
-      debugLog(`Resource request: ${resourceType} - ${request.url()}`);
+      // debugLog(`Resource request: ${resourceType} - ${request.url()}`);
       
       if (request.isNavigationRequest() && request.redirectChain().length > 0) {
         debugLog(`Redirect detected: ${request.url()}`);
@@ -154,7 +165,7 @@ fastify.get('/render', async (request, reply) => {
       }
 
       if (BLOCKED_RESOURCES.has(resourceType)) {
-        debugLog(`Blocked resource: ${resourceType} - ${request.url()}`);
+        // debugLog(`Blocked resource: ${resourceType} - ${request.url()}`);
         request.abort();
       } else {
         request.continue();
@@ -189,12 +200,13 @@ fastify.get('/render', async (request, reply) => {
 
     // For redirects, send response without HTML
     if (isRedirected || response.status() >= 300 && response.status() < 400) {
+      debugLog('Redirect detected');
       return prepareResponse(reply, response);
     }
 
     // For successful responses, include rendered HTML
     const html = await page.content();
-    debugLog(`HTML content: ${html}`);
+    // debugLog(`HTML content: ${html}`);
 
     return prepareResponse(reply, response, html);
 
