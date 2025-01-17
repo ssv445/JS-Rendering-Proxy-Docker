@@ -134,35 +134,37 @@ getBrowser().catch(error => {
 
 const isValidUrl = function (url) {
   try {
-    new URL(url); // This will throw if URL is invalid
+    new URL(url.trim()); // This will throw if URL is invalid
     return url.startsWith('http://') || url.startsWith('https://');
   } catch {
     return false;
   }
 }
 
+
+
 // Block unsafe URLs, private IPs, and invalid URLs
 const blockUnsafeUrls = async (url, reply) => {
-  // URL validation
-  if (!url) {
-    reply.code(400).send({ error: 'URL parameter is required' });
-    return true;
-  }
+  try {
+    // URL validation
+    if (!url) {
+      reply.code(400).send({ error: 'URL parameter is required' });
+      return true;
+    }
 
-  if (!isValidUrl(url)) {
-    reply.code(400).send({ error: 'Invalid URL format. Must be a valid HTTP/HTTPS URL' });
+    if (!isValidUrl(url)) {
+      reply.code(400).send({ error: 'Invalid URL format. Must be a valid HTTP/HTTPS URL' });
+      return null;
+    }
+
+    const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname;
+    //check further
+    //TODO: check if the hostname is a private IP
+  } catch (error) {
+    reply.code(400).send({ error: 'Invalid URL format' });
     return null;
   }
-  // // SSRF protection
-  // try {
-  //   const parsedUrl = new URL(url);
-  //   const hostname = parsedUrl.hostname;
-  //   if (await isPrivateIP(hostname)) {
-  //     return reply.code(403).send({ error: 'Access to internal URLs is forbidden' });
-  //   }
-  // } catch (error) {
-  //   return reply.code(400).send({ error: 'Invalid URL format' });
-  // }
 
   //trim url
   url = url.trim();
@@ -209,6 +211,7 @@ fastify.get('/render', async (request, reply) => {
       if (BLOCKED_RESOURCES.has(resourceType)) {
         // debugLog(`Blocked resource: ${resourceType} - ${request.url()}`);
         request.abort();
+        return;
       }
 
       request.continue();

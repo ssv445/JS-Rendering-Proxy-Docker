@@ -19,7 +19,7 @@ fastify.get('/success', async (request, reply) => {
 
 fastify.get('/redirect', async (request, reply) => {
   return reply
-    .code(301)
+    .code(302)
     .header('Location', 'http://localhost:3001/success')
     .send();
 });
@@ -49,6 +49,11 @@ fastify.get('/custom-headers', async (request, reply) => {
     .header('X-Custom-Header', 'test-value')
     .header('Set-Cookie', 'session=123')
     .send('<html><body>Custom headers</body></html>');
+});
+
+// 500 error
+fastify.get('/500', async (request, reply) => {
+  return reply.code(500).send('<html><body>500 error</body></html>');
 });
 
 fastify.listen({ port: 3001 }, (err) => {
