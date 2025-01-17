@@ -56,6 +56,24 @@ process.on('SIGTERM', async () => {
   process.exit();
 });
 
+function sanitizeHeaderValue(value) {
+  if (!value) return '';
+  
+  return value
+    // Convert to string in case of numbers/other types
+    .toString()
+    // Replace all types of newlines
+    .replace(/\r?\n|\r/g, ' ')
+    // Replace tabs
+    .replace(/\t/g, ' ')
+    // Replace multiple spaces with single space
+    .replace(/\s+/g, ' ')
+    // Remove non-printable characters
+    .replace(/[\x00-\x1F\x7F]/g, '')
+    // Remove potentially dangerous characters
+    .replace(/[()<>@,;:\\"/[\]?={}]/g, '')
+    .trim();
+}
 
 function prepareResponse(reply, response, html = null) {
   try {
@@ -63,16 +81,27 @@ function prepareResponse(reply, response, html = null) {
     const status = response.status();
     const headers = response.headers();
 
-    // Set response headers, excluding problematic ones and sanitizing values
+    // Problematic headers that should be skipped
+    const skipHeaders = new Set([
+      'set-cookie',
+      'transfer-encoding',
+      'connection',
+      'keep-alive',
+      'upgrade',
+      'proxy-authenticate',
+      'proxy-authorization'
+    ]);
+
     Object.entries(headers).forEach(([key, value]) => {
-      if (!['set-cookie', 'transfer-encoding'].includes(key.toLowerCase())) {
-        // Sanitize header value by replacing newlines with spaces
-        const sanitizedValue = value.replace(/\n/g, ' ').trim();
-        // debugLog(`Setting header: <${key}> - <${sanitizedValue}>`);
+      const lowerKey = key.toLowerCase();
+      if (!skipHeaders.has(lowerKey)) {
         try {
-          reply.header(key, sanitizedValue);
+          const sanitizedValue = sanitizeHeaderValue(value);
+          if (sanitizedValue) {
+            reply.header(key, sanitizedValue);
+          }
         } catch (error) {
-          debugLog(`Error setting header: <${key}> - <${sanitizedValue}>`);
+          debugLog(`Error setting header: ${key} - ${error.message}`);
         }
       }
     });
