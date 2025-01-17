@@ -3,7 +3,7 @@ const puppeteer = require('puppeteer');
 const { URL } = require('url');
 
 // Resource types to block
-const BLOCKED_RESOURCES = new Set([]);//'image', 'media', 'font']);
+const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
 
 
 
@@ -58,6 +58,7 @@ process.on('SIGTERM', async () => {
 
 
 function prepareResponse(reply, response, html = null) {
+  debugLog('Preparing response');
   const status = response.status();
   const headers = response.headers();
 
@@ -74,11 +75,7 @@ function prepareResponse(reply, response, html = null) {
   }
 
   // For successful responses, include the HTML
-  return reply.code(status).send({
-    status,
-    headers,
-    html
-  });
+  return reply.code(status).headers(headers).send(html);
 }
 
 // Initialize browserInstance on startup
@@ -171,7 +168,9 @@ fastify.get('/render', async (request, reply) => {
     });
 
     // Set request headers
-    await page.setExtraHTTPHeaders(request.headers);
+    // debugLog(`Request headers: ${JSON.stringify(request.headers)}`);
+    // // Generates ERROR
+    // await page.setExtraHTTPHeaders(request.headers);
 
     // Navigate with timeout
     const response = await page.goto(url, {
@@ -195,6 +194,8 @@ fastify.get('/render', async (request, reply) => {
 
     // For successful responses, include rendered HTML
     const html = await page.content();
+    debugLog(`HTML content: ${html}`);
+
     return prepareResponse(reply, response, html);
 
   } catch (error) {
@@ -208,6 +209,7 @@ fastify.get('/render', async (request, reply) => {
       await page.close();
       debugLog('Page closed');
     }
+    debugLog('Request processed');
   }
 });
 
