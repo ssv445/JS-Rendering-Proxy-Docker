@@ -172,9 +172,14 @@ const blockUnsafeUrls = async (url, reply) => {
   return url;
 }
 
-fastify.get('/render', async (request, reply) => {
-  let url = request.query.url;
-  debugLog(`Received request for URL: ${url}`);
+fastify.get('/*', async (request, reply) => {
+  const targetUrl = `${request.url}`;
+  debugLog(`Received request for URL: ${targetUrl}`);
+  let url = targetUrl;
+
+  if (targetUrl === '/ok') {
+    return reply.code(200).send('ok');
+  }
 
   url = await blockUnsafeUrls(url, reply);
   if (!url) {

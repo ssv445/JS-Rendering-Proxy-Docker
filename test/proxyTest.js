@@ -4,10 +4,21 @@ const assert = require('assert');
 const PROXY_URL = 'http://localhost:3000/render';
 const TEST_TIMEOUT = 35000;
 
-// axios should not throw an error if the status code is not 200
-axios.defaults.validateStatus = () => true;
-axios.defaults.maxRedirects = 0;
+// Configure axios to use proxy
+const axiosProxyInstance = axios.create({
+  proxy: {
+    host: 'localhost',
+    port: 3000
+  },
+  // Still don't throw on non-200
+  validateStatus: () => true,
+  maxRedirects: 0
+});
 
+const axiosInstance = axios.create({
+  validateStatus: () => true,
+  maxRedirects: 0
+});
 
 async function printResponse(response) {
   console.log('Response:  : ', { data: response.data, status: response.status, location: response.headers.location });
@@ -15,8 +26,7 @@ async function printResponse(response) {
 
 async function testSuccessfulRender() {
   console.log('\nTesting successful render...');
-  const response = await axios.get(`${PROXY_URL}?url=http://localhost:3001/success`);
-  // printResponse(response);
+  const response = await axiosProxyInstance.get('http://localhost:3001/success');
   assert.strictEqual(response.status, 200);
   assert(response.data.includes('<h1>Success</h1>'));
   console.log('✅ Success test passed');
@@ -24,7 +34,7 @@ async function testSuccessfulRender() {
 
 async function test404() {
   console.log('\nTesting 404...');
-  const response = await axios.get(`${PROXY_URL}?url=http://localhost:3001/unknown`);
+  const response = await axiosProxyInstance.get('http://localhost:3001/unknown');
   // printResponse(response);
   assert.strictEqual(response.status, 404);
   console.log('✅ 404 test passed');
@@ -32,7 +42,7 @@ async function test404() {
 
 async function testRedirectHandling() {
   console.log('\nTesting redirect handling...');
-  const response = await axios.get(`${PROXY_URL}?url=http://localhost:3001/redirect`);
+  const response = await axiosProxyInstance.get('http://localhost:3001/redirect');
   // printResponse(response);
   assert.strictEqual(response.status, 302);
   assert(response.headers.location);
@@ -41,7 +51,7 @@ async function testRedirectHandling() {
 
 async function testRedirectChain() {
   console.log('\nTesting redirect chain...');
-  const response = await axios.get(`${PROXY_URL}?url=http://localhost:3001/redirect-chain`);
+  const response = await axiosProxyInstance.get('http://localhost:3001/redirect-chain');
   // printResponse(response);
   assert.strictEqual(response.status, 301);
   console.log('✅ Redirect chain test passed');
@@ -49,7 +59,7 @@ async function testRedirectChain() {
 
 async function testRedirect404() {
   console.log('\nTesting redirect 404...');
-  const response = await axios.get(`${PROXY_URL}?url=http://localhost:3001/redirect-404`);
+  const response = await axiosProxyInstance.get('http://localhost:3001/redirect-404');
   // printResponse(response);
   assert.strictEqual(response.status, 301);
   console.log('✅ Redirect 404 test passed');
@@ -57,7 +67,7 @@ async function testRedirect404() {
 
 async function test500() {
   console.log('\nTesting 500...');
-  const response = await axios.get(`${PROXY_URL}?url=http://localhost:3001/500`);
+  const response = await axiosProxyInstance.get('http://localhost:3001/500');
   // printResponse(response);
   assert.strictEqual(response.status, 500);
   console.log('✅ 500 test passed');
@@ -65,7 +75,7 @@ async function test500() {
 
 async function testCustomHeaders() {
   console.log('\nTesting custom headers...');
-  const headersResponse = await axios.get(`${PROXY_URL}?url=http://localhost:3001/custom-headers`);
+  const headersResponse = await axiosProxyInstance.get('http://localhost:3001/custom-headers');
   assert.strictEqual(headersResponse.headers['x-custom-header'], 'test-value');
   assert(!headersResponse.headers['set-cookie']); // Should be stripped
   console.log('✅ Custom headers test passed');
@@ -73,7 +83,7 @@ async function testCustomHeaders() {
 
 async function testSlowResponse() {
   console.log('\nTesting slow response...');
-  const response = await axios.get(`${PROXY_URL}?url=http://localhost:3001/slow`);
+  const response = await axiosProxyInstance.get('http://localhost:3001/slow');
   // printResponse(response);
   assert.strictEqual(response.status, 200);
   console.log('✅ Slow response test passed');
@@ -81,7 +91,7 @@ async function testSlowResponse() {
 
 async function testInvalidURL() {
   console.log('\nTesting invalid URL...');
-  const response = await axios.get(`${PROXY_URL}?url=invalid-url`);
+  const response = await axiosProxyInstance.get(`invalid-url`);
   // printResponse(response);
   assert.strictEqual(response.status, 400);
 
@@ -91,7 +101,7 @@ async function testInvalidURL() {
 async function testPrivateIPBlocking() {
   console.log('\nTesting private IP blocking...');
   try {
-    await axios.get(`${PROXY_URL}?url=http://192.168.1.1`);
+    await axiosProxyInstance.get(`http://192.168.1.1`);
     assert.fail('Should have thrown an error');
     console.log('✅ Private IP blocking test passed');
   } catch (error) {
@@ -101,8 +111,6 @@ async function testPrivateIPBlocking() {
 
 async function testRandomWebsite() {
   let websites = require('./websiteList');
-  // randomize the websites
-  // websites = websites.sort(() => Math.random() - 0.5);
 
   console.log('\nTesting random websites...');
 
@@ -110,28 +118,27 @@ async function testRandomWebsite() {
     let randomWebsite = websites[i];
     try {
       console.log(`Website: [${i + 1}]`, randomWebsite);
-      const { status } = await axios.get(`${PROXY_URL}?url=${randomWebsite}`);
+      const { status } = await axiosProxyInstance.get(randomWebsite);
       console.log('Status: ', status);
     } catch (error) {
-      console.log('Website: [${i + 1}]', randomWebsite, 'Error: ', error);
+      console.log(`Website: [${i + 1}] ${randomWebsite} Error: `, error);
     }
   }
   console.log('✅ Random website test passed');
-
 }
 
 async function runTests() {
 
 
   // check if the mock server is accepting requests
-  const mockServerResponse = await axios.get('http://localhost:3001/success');
+  const mockServerResponse = await axiosInstance.get('http://localhost:3001/success');
   if (mockServerResponse.status !== 200) {
     console.error('Mock server is not accepting requests');
     process.exit(1);
   }
 
   // check if the proxy server is accepting requests
-  const proxyServerResponse = await axios.get('http://localhost:3000/render?url=http://localhost:3001/success');
+  const proxyServerResponse = await axiosInstance.get('http://localhost:3000/ok');
   if (proxyServerResponse.status !== 200) {
     console.error('Proxy server is not accepting requests');
     process.exit(1);
@@ -139,18 +146,18 @@ async function runTests() {
 
   try {
 
-    // await testSuccessfulRender();
-    // await test404();
-    // await testRedirectChain();
-    // await testRedirectHandling();
-    // await testRedirect404();
-    // await test500();
+    await testSuccessfulRender();
+    await test404();
+    await testRedirectChain();
+    await testRedirectHandling();
+    await testRedirect404();
+    await test500();
 
-    // await testCustomHeaders();
-    // await testSlowResponse();
-    // await testInvalidURL();
+    await testCustomHeaders();
+    await testSlowResponse();
+    await testInvalidURL();
 
-    await testRandomWebsite();
+    // await testRandomWebsite();
 
 
 
