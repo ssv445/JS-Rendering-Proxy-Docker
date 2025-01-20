@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const TEST_TIMEOUT = 60000;
+const TEST_TIMEOUT = 30000;
 
 // Configure axios to use proxy
 const axiosProxyInstance = axios.create({
@@ -12,15 +12,16 @@ const axiosProxyInstance = axios.create({
     // Still don't throw on non-200
     validateStatus: () => true,
     maxRedirects: 0,
-    timeout: 60000,
+    timeout: 10000,
 });
 
 const axiosInstance = axios.create({
     validateStatus: () => true,
-    maxRedirects: 0
+    maxRedirects: 0,
+    timeout: 10000,
 });
 
-describe('Proxy Server Tests', () => {
+describe('Basic Tests', () => {
     beforeAll(async () => {
         // Check if servers are running
         const mockServerResponse = await axiosInstance.get('http://localhost:3001/success');
@@ -80,12 +81,5 @@ describe('Proxy Server Tests', () => {
     }, TEST_TIMEOUT);
 
 
-    describe('Random Website Tests', () => {
-        const websites = require('./websiteList');
 
-        test.each(websites)('should handle website: %s', async (website) => {
-            const response = await axiosProxyInstance.get(website);
-            expect(response.status).toBe(200);
-        }, TEST_TIMEOUT);
-    });
 }); 

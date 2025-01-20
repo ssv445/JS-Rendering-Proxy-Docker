@@ -5,7 +5,7 @@
     "dev": "DEBUG=true node --watch index.js",
     "start": "node index.js",
     "test:server": "DEBUG=true node --watch test/mockServer.js",
-    "test": "jest --verbose --maxWorkers=5"
+    "test": "jest --config=test/jest.config.js"
   },
   "dependencies": {
     "fastify": "^4.19.0",
