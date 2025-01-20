@@ -21,7 +21,7 @@ function debugLog(...args) {
 let browserInstance = null;
 let requestCount = 0;
 const PAGE_LIMIT_PER_BROWSER_INSTANCE = 1;
-const PAGE_TIMEOUT_MS = 30000;
+const PAGE_TIMEOUT_MS = 10000;
 async function getBrowser() {
   if (!browserInstance || requestCount >= PAGE_LIMIT_PER_BROWSER_INSTANCE) {
     debugLog(`Creating new browser instance. Previous count: ${requestCount}`);
@@ -244,19 +244,18 @@ fastify.get('/*', async (request, reply) => {
 
     // Navigate with timeout
     const response = await page.goto(url, {
-      waitUntil: ['networkidle2', 'domcontentloaded', 'load'],
+      waitUntil: ['networkidle0', 'domcontentloaded', 'load'],
       timeout: PAGE_TIMEOUT_MS
     }).catch(error => {
       if (isRedirected && redirectResponse) {
         debugLog('Returning initial response for redirect');
         return redirectResponse;
-      } else {
-        debugLog(`Navigation error: ${error.message}`);
-        throw error;
       }
+      debugLog(`Navigation error: ${error.message}`);
+      throw error;
     });
 
-    debugLog(`Page loaded with status: ${response.status()}`);
+    debugLog(`Page ${url} loaded with status: ${response.status()}`);
 
     // For redirects, send response without HTML
     if (redirectResponse) {
@@ -265,7 +264,7 @@ fastify.get('/*', async (request, reply) => {
     }
 
     // For successful responses, include rendered HTML
-    debugLog('No redirect detected, sending HTML');
+    debugLog(`No redirect detected, sending HTML for ${url}`);
     const html = await page.content();
     return prepareResponse(reply, response, html);
 
@@ -276,12 +275,12 @@ fastify.get('/*', async (request, reply) => {
     }
     return reply.code(500).send({ error: error.message });
   } finally {
-    debugLog('Closing page');
+    debugLog(`Closing page for ${url}`);
     if (page) {
       await page.close();
-      debugLog('Page closed');
+      debugLog(`Page closed for ${url}`);
     }
-    debugLog('Request processed successfully');
+    debugLog(`Request processed successfully for ${url}`);
     debugLog('--------------------------------');
   }
 });

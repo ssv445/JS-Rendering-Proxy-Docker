@@ -1,10 +1,9 @@
 {
   "name": "js-rendering-proxy-docker",
   "version": "1.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "DEBUG=true node --watch index.ts",
-    "start": "node index.ts",
+    "dev": "DEBUG=true node --watch index.js",
+    "start": "node index.js",
     "test:server": "DEBUG=true node --watch test/mockServer.js",
     "test": "jest --verbose --maxWorkers=5"
   },
