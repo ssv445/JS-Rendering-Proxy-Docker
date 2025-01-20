@@ -1,17 +1,23 @@
 {
   "name": "js-rendering-proxy-docker",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "DEBUG=true node --watch index.js",
-    "start": "node index.js",
+    "dev": "DEBUG=true node --watch index.ts",
+    "start": "node index.ts",
     "test:server": "DEBUG=true node --watch test/mockServer.js",
-    "test": "node test/proxyTest.js"
+    "test": "jest --verbose --maxWorkers=5"
   },
   "dependencies": {
     "fastify": "^4.19.0",
     "puppeteer": "^19.7.5"
   },
   "devDependencies": {
-    "axios": "^1.4.0"
+    "axios": "^1.4.0",
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testTimeout": 35000,
+    "testEnvironment": "node"
   }
 }
