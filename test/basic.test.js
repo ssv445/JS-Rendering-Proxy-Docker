@@ -12,13 +12,13 @@ const axiosProxyInstance = axios.create({
     // Still don't throw on non-200
     validateStatus: () => true,
     maxRedirects: 0,
-    timeout: 10000,
+    timeout: TEST_TIMEOUT - 2000,
 });
 
 const axiosInstance = axios.create({
     validateStatus: () => true,
     maxRedirects: 0,
-    timeout: 10000,
+    timeout: TEST_TIMEOUT - 2000,
 });
 
 describe('Basic Tests', () => {

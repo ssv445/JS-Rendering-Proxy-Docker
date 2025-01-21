@@ -28,26 +28,9 @@ const axiosProxyInstance = axios.create({
     validateStatus: () => true,
     maxRedirects: 0,
     timeout: 31000,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
 });
-
-// Add error event listener
-axiosProxyInstance.interceptors.request.use(request => {
-    request.metadata = { startTime: new Date() };
-    return request;
-});
-
-axiosProxyInstance.interceptors.response.use(
-    response => {
-        response.config.metadata.endTime = new Date();
-        response.duration = response.config.metadata.endTime - response.config.metadata.startTime;
-        console.log(`Request took: ${response.duration}ms`);
-        return response;
-    },
-    error => {
-        console.error('Axios error:', error.code, error.message);
-        throw error;
-    }
-);
 
 const axiosInstance = axios.create({
     validateStatus: () => true,
@@ -66,7 +49,15 @@ describe('Websites Test', () => {
     });
 
     test.each(uniqueWebsites)('should handle website: %s', async (website) => {
-        const response = await axiosProxyInstance.get(website);
-        expect(response.status).toBe(200);
+        const startTime = Date.now();
+
+        try {
+            const response = await axiosProxyInstance.get(website);
+            console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}`);
+            expect(response.status).toBe(200);
+        } catch (error) {
+            console.error(`[${website}] Error:`, error.message);
+            throw error;
+        }
     }, TEST_TIMEOUT);
 }); 
