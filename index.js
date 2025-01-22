@@ -133,8 +133,18 @@ fastify.get('/*', async (request, reply) => {
   const targetUrl = `${request.url}`;
   let url = targetUrl;
 
-  if (targetUrl === '/ok') {
-    return reply.code(200).send('ok');
+  //request url does not start with http
+  if (!request.url.startsWith('http')) {
+    if (targetUrl === '/ok') {
+      return reply.code(200).send('ok');
+    }
+
+    //user can pass URL as query param also, but not a request as proxy url
+    if (request.query.render_url) {
+      url = request.query.render_url;
+    } else {
+      return reply.code(400).send({ error: 'render_url is required' });
+    }
   }
 
   try {

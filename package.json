@@ -1,6 +1,6 @@
 {
   "name": "js-rendering-proxy-docker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "scripts": {
     "dev": "DEBUG=true node --watch index.js",
     "start": "node index.js",

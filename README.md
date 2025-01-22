@@ -74,9 +74,40 @@ The project includes a devcontainer configuration with:
 The only end point is render, which accepts URL to render and return HTML.
 
 ```
-http://localhost:3000/render?url=[The-URL-To-Render]
+http://localhost:3000/?render_url=[The-URL-To-Render]
 
 ```
+
+Or you can use it as a proxy.
+
+```
+// Using axios:
+const axios = require('axios');
+
+const proxyClient = axios.create({
+  proxy: {
+    host: 'localhost',
+    port: 3000,
+    protocol: 'http'
+  }
+});
+
+// Make requests through proxy
+await proxyClient.get('https://example.com');
+```
+
+### CURL Support
+
+This proxy does not support CURL requests because CURL always uses tunneling for HTTPS URLs. For HTTPS requests, use alternative HTTP clients like:
+
+- axios
+- fetch
+- got
+- node-fetch
+- request
+- superagent
+
+Or disable HTTPS tunneling in CURL (not possible as if now).
 
 ## Contributing
 
