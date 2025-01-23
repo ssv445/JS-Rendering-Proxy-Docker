@@ -6,10 +6,13 @@
 # Get the version number from the package.json file
 version=$(grep -o '"version": "[^"]*"' package.json | cut -d'"' -f4)
 
-docker build -t js-rendering-proxy-docker .
- 
+# build the docker image for all the platforms
+docker buildx build --platform linux/amd64 -t js-rendering-proxy-docker .
+
+# tag the image with the version number
 docker tag js-rendering-proxy-docker readybytes/js-rendering-proxy-docker:latest
 docker push readybytes/js-rendering-proxy-docker:latest
 
+# tag the image with the version number
 docker tag js-rendering-proxy-docker readybytes/js-rendering-proxy-docker:$version
 docker push readybytes/js-rendering-proxy-docker:$version
