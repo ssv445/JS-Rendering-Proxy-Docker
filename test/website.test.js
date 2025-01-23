@@ -30,6 +30,9 @@ const axiosProxyInstance = axios.create({
     timeout: 31000,
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
+    headers: {
+        'x-api-key': '1234567890'
+    }
 });
 
 const axiosInstance = axios.create({

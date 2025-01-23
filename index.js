@@ -5,10 +5,10 @@ const { URL } = require('url');
 // Resource types to block
 const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
 
-
-
 // Add debug flag
 const DEBUG = process.env.DEBUG === 'true';
+const API_KEY = process.env.API_KEY || null;
+
 
 // Add debug logging function
 function debugLog(...args) {
@@ -147,6 +147,14 @@ fastify.get('/*', async (request, reply) => {
     }
   }
 
+  //check if api key is present
+  if (API_KEY) {
+    const apiKey = request.headers['x-api-key'];
+    if (apiKey !== API_KEY) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+  }
+
   try {
     url = await blockUnsafeUrls(url, reply);
   } catch (error) {
@@ -233,7 +241,7 @@ fastify.get('/*', async (request, reply) => {
     // For redirects, send response without HTML
     if (redirectResponse) {
       await prepareHeader(reply, redirectResponse);
-      debugLog('Redirect detected, sending without HTML', redirectResponse.headers());
+      debugLog('Redirect detected, sending without HTML');
       return reply.code(response.status()).send();
     }
 

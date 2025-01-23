@@ -3,6 +3,7 @@ const config = {
     testEnvironment: 'node',
     maxWorkers: 5,
     verbose: true,
+
 }
 
 module.exports = config;

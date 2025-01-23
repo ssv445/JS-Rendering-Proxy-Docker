@@ -2,7 +2,7 @@
   "name": "js-rendering-proxy-docker",
   "version": "1.0.1",
   "scripts": {
-    "dev": "DEBUG=true node --watch index.js",
+    "dev": "DEBUG=true API_KEY=1234567890 node --watch index.js",
     "start": "node index.js",
     "test:server": "DEBUG=true node --watch test/mockServer.js",
     "test": "jest --config=test/jest.config.js"

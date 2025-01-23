@@ -13,6 +13,10 @@ const axiosProxyInstance = axios.create({
     validateStatus: () => true,
     maxRedirects: 0,
     timeout: TEST_TIMEOUT - 2000,
+    // add api key to headers
+    headers: {
+        'x-api-key': '1234567890'
+    }
 });
 
 const axiosInstance = axios.create({
