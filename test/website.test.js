@@ -11,6 +11,12 @@ const websites = [
     'https://sitechecker.pro',
     'https://indexcheckr.com',
     'https://0mrr.com',
+    'https://www.creditbenchmark.com/',
+    'https://taqtics.ai/',
+    'https://app.advcollective.com/',
+    'https://blog.cirquedusoleil.com/',
+    'https://www.therapyroute.com/',
+    'https://www.schedulethreads.com/',
 
 ];
 
