@@ -56,6 +56,7 @@ docker run -p 3000:3000 puppeteer-scraper
 
 - `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD`: Set to `true` (uses system Chromium)
 - `PUPPETEER_EXECUTABLE_PATH`: Set to `/usr/bin/chromium`
+- `API_KEY`: Set your secret API key for authentication (required)
 
 ## Development
 
@@ -71,29 +72,32 @@ The project includes a devcontainer configuration with:
 
 ## API Endpoints
 
-The only end point is render, which accepts URL to render and return HTML.
+The only endpoint is render, which accepts URL to render and return HTML. API key must be provided in the X-API-Key header.
 
 ```
 http://localhost:3000/?render_url=[The-URL-To-Render]
-
+X-API-Key: YOUR_API_KEY
 ```
 
 Or you can use it as a proxy.
 
-```
+```javascript
 // Using axios:
-const axios = require('axios');
+const axios = require("axios");
 
 const proxyClient = axios.create({
   proxy: {
-    host: 'localhost',
+    host: "localhost",
     port: 3000,
-    protocol: 'http'
-  }
+    protocol: "http",
+  },
+  headers: {
+    "X-API-Key": "YOUR_API_KEY",
+  },
 });
 
 // Make requests through proxy
-await proxyClient.get('https://example.com');
+await proxyClient.get("https://example.com");
 ```
 
 ### CURL Support
