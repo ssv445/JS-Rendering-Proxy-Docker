@@ -154,6 +154,9 @@ fastify.get('/*', async (request, reply) => {
     return reply.code(error.status).send({ error: error.message });
   }
 
+  // use client user agent for puppeteer
+  const userAgent = request.headers['user-agent'] || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+
   const browserInstance = await puppeteer.launch({
     headless: 'new', // or true/false depending on your Puppeteer version
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -164,7 +167,8 @@ fastify.get('/*', async (request, reply) => {
       '--ignore-certificate-errors-spki-list',
       '--disable-web-security'
     ],
-    ignoreHTTPSErrors: true
+    ignoreHTTPSErrors: true,
+    userAgent: userAgent
   });
 
   let page;
@@ -229,7 +233,7 @@ fastify.get('/*', async (request, reply) => {
     // For redirects, send response without HTML
     if (redirectResponse) {
       await prepareHeader(reply, redirectResponse);
-      debugLog('Redirect detected, sending without HTML');
+      debugLog('Redirect detected, sending without HTML', redirectResponse.headers());
       return reply.code(response.status()).send();
     }
 
