@@ -56,7 +56,7 @@ describe('Websites Test', () => {
 
         try {
             const response = await axiosProxyInstance.get(website);
-            console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}`);
+            // console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}`);
             expect(response.status).toBe(200);
         } catch (error) {
             console.error(`[${website}] Error:`, error.message);

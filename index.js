@@ -1,6 +1,16 @@
-const fastify = require('fastify')();
 const puppeteer = require('puppeteer');
 const { URL } = require('url');
+
+const fastify = require('fastify')({
+  logger: true,
+  // Add compression support
+  compression: {
+    global: true,
+    encodings: ['gzip', 'deflate']
+  }
+});
+
+fastify.register(require('@fastify/compress'));
 
 // Resource types to block
 const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
@@ -249,7 +259,6 @@ fastify.get('/*', async (request, reply) => {
     const html = await page.content();
     await prepareHeader(reply, response);
     debugLog(`No redirect detected, sending HTML for ${url}: size: ${html.length}`);
-    reply.header('Content-Encoding', 'identity');
     reply.header('Content-Type', 'text/html; charset=utf-8');
     return reply.code(response.status()).send(html);
 

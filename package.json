@@ -8,6 +8,7 @@
     "test": "jest --config=test/jest.config.js"
   },
   "dependencies": {
+    "@fastify/compress": "^6.0.0",
     "fastify": "^4.19.0",
     "puppeteer": "^19.7.5"
   },
