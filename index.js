@@ -31,7 +31,7 @@ function debugLog(...args) {
 let browserInstance = null;
 let requestCount = 0;
 const PAGE_LIMIT_PER_BROWSER_INSTANCE = 50;
-const PAGE_TIMEOUT_MS = 20000;
+const PAGE_TIMEOUT_MS = 60000;
 
 
 
