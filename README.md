@@ -100,6 +100,17 @@ const proxyClient = axios.create({
 await proxyClient.get("https://example.com");
 ```
 
+## API Headers
+
+The following custom headers can be used to control the page rendering behavior:
+
+| Header                   | Description                                                                                                 | Default                                                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `user-agent`             | User agent string to use for the browser                                                                    | `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36` |
+| `x-page-timeout-ms`      | Maximum time to wait for page load in milliseconds                                                          | 60000                                                                                                                       |
+| `x-wait-until-condition` | When to consider navigation successful. Options: `load`, `domcontentloaded`, `networkidle0`, `networkidle2` | `networkidle2`                                                                                                              |
+| `x-need-fresh-instance`  | Force creation of a new browser instance                                                                    | `false`                                                                                                                     |
+
 ### CURL Support
 
 This proxy does not support CURL requests because CURL always uses tunneling for HTTPS URLs. For HTTPS requests, use alternative HTTP clients like:
@@ -112,34 +123,3 @@ This proxy does not support CURL requests because CURL always uses tunneling for
 - superagent
 
 Or disable HTTPS tunneling in CURL (not possible as if now).
-
-## API Headers
-
-The following custom headers can be used to control the page rendering behavior:
-
-| Header                   | Description                                                                                                 | Default                                                                                                                     |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `user-agent`             | User agent string to use for the browser                                                                    | `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36` |
-| `x-page-timeout-ms`      | Maximum time to wait for page load in milliseconds                                                          | 60000                                                                                                                       |
-| `x-wait-until-condition` | When to consider navigation successful. Options: `load`, `domcontentloaded`, `networkidle0`, `networkidle2` | `networkidle2`                                                                                                              |
-| `x-need-fresh-instance`  | Force creation of a new browser instance                                                                    | `false`                                                                                                                     |
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## License
-
-MIT
-
-## Tech Stack
-
-- Node.js
-- Fastify
-- Puppeteer
-- Docker
-- VS Code Dev Containers
