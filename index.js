@@ -29,11 +29,42 @@ function debugLog(...args) {
 
 // Browser management
 let browserInstance = null;
-let requestCount = 0;
-const PAGE_LIMIT_PER_BROWSER_INSTANCE = 50;
+let pageCount = 0;
+const PAGE_LIMIT_PER_BROWSER_INSTANCE = 500;
 const PAGE_TIMEOUT_MS = 60000;
 
+// Add browser initialization function
+async function getBrowser() {
+  if (!browserInstance || pageCount >= PAGE_LIMIT_PER_BROWSER_INSTANCE) {
+    //close the browser instance if it exists
+    if (browserInstance) {
+      await browserInstance.close();
+    }
 
+    //create a new browser instance
+    browserInstance = await puppeteer.launch({
+      headless: 'new',
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--ignore-certificate-errors',
+        '--ignore-certificate-errors-spki-list',
+        '--disable-web-security'
+      ],
+      ignoreHTTPSErrors: true
+    });
+
+    // if no browser instance is created, throw an error
+    if (!browserInstance) {
+      throw new Error('Failed to create browser instance');
+    }
+
+    pageCount = 0;
+  }
+  pageCount++;
+  return browserInstance;
+}
 
 function sanitizeHeaderValue(value) {
   if (!value) return '';
@@ -175,23 +206,11 @@ fastify.get('/*', async (request, reply) => {
   // use client user agent for puppeteer
   const userAgent = request.headers['user-agent'] || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
 
-  const browserInstance = await puppeteer.launch({
-    headless: 'new', // or true/false depending on your Puppeteer version
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--ignore-certificate-errors',
-      '--ignore-certificate-errors-spki-list',
-      '--disable-web-security'
-    ],
-    ignoreHTTPSErrors: true,
-    userAgent: userAgent
-  });
-
+  const browser = await getBrowser();
   let page;
   try {
-    page = await browserInstance.newPage();
+    page = await browser.newPage();
+    await page.setUserAgent(userAgent);
     // debugLog('New page created');
     if (!page) {
       debugLog('New page not created');
@@ -274,11 +293,7 @@ fastify.get('/*', async (request, reply) => {
   } finally {
     if (page) {
       await page.close();
-    }
-
-    //close browser instance
-    if (browserInstance) {
-      await browserInstance.close();
+      debugLog('Page closed');
     }
     debugLog(`Request processing completed for ${url}`);
   }
