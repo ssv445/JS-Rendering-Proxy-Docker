@@ -31,11 +31,14 @@ function debugLog(...args) {
 let browserInstance = null;
 let pageCount = 0;
 const PAGE_LIMIT_PER_BROWSER_INSTANCE = 500;
-const PAGE_TIMEOUT_MS = 60000;
+const DEFAULT_PAGE_TIMEOUT_MS = 60000;
+const DEFAULT_WAIT_UNTIL_CONDITION = 'networkidle2';
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+
 
 // Add browser initialization function
-async function getBrowser() {
-  if (!browserInstance || pageCount >= PAGE_LIMIT_PER_BROWSER_INSTANCE) {
+async function getBrowser(needFreshInstance = false) {
+  if (!browserInstance || pageCount >= PAGE_LIMIT_PER_BROWSER_INSTANCE || needFreshInstance) {
     //close the browser instance if it exists
     if (browserInstance) {
       await browserInstance.close();
@@ -204,9 +207,14 @@ fastify.get('/*', async (request, reply) => {
   }
 
   // use client user agent for puppeteer
-  const userAgent = request.headers['user-agent'] || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+  const userAgent = request.headers['user-agent'] || DEFAULT_USER_AGENT;
+  const page_timeout_ms = parseInt(request.headers['x-page-timeout-ms']) || DEFAULT_PAGE_TIMEOUT_MS;
+  const wait_until_condition = [request.headers['x-wait-until-condition'] || DEFAULT_WAIT_UNTIL_CONDITION];
+  const needFreshInstance = Boolean(request.headers['x-need-fresh-instance']) || false;
 
-  const browser = await getBrowser();
+  //get browser instance
+  const browser = await getBrowser(needFreshInstance);
+
   let page;
   try {
     page = await browser.newPage();
@@ -254,8 +262,8 @@ fastify.get('/*', async (request, reply) => {
 
     // Navigate with timeout
     const response = await page.goto(url, {
-      waitUntil: ['networkidle2'],
-      timeout: PAGE_TIMEOUT_MS
+      waitUntil: wait_until_condition,
+      timeout: page_timeout_ms
     }).catch(error => {
       if (isRedirected && redirectResponse) {
         debugLog('Returning initial response for redirect');
