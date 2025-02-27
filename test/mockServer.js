@@ -56,6 +56,47 @@ fastify.get('/500', async (request, reply) => {
   return reply.code(500).send('<html><body>500 error</body></html>');
 });
 
+fastify.get('/block-js', async (request, reply) => {
+  console.log('in block-js');
+  return reply
+    .code(200)
+    .header('Content-Type', 'text/html')
+    .send(`
+    <html>
+      <head>
+        <script src="https://code.jquery.com/jquery.min.js"></script>
+        <script src="https://linkstorm.io/linkstorm_site_linker.js"></script>
+        <script src="https://ssl.google-analytics.com/ga.js"></script>
+        <script src="http://localhost:3001/super-slow.js"></script>
+        <link rel="stylesheet" href="http://localhost:3001/super-slow.css">
+      </head>
+      <body>
+        BlockJSTest
+      </body>
+    </html>
+  `);
+});
+
+fastify.get('/super-slow.js', async (request, reply) => {
+  console.log('in super-slow.js');
+  await new Promise(resolve => setTimeout(resolve, 10000));
+  const js = `
+    console.log('super slow');
+  `;
+  return reply.send(js);
+});
+
+fastify.get('/super-slow.css', async (request, reply) => {
+  console.log('in super-slow.css');
+  await new Promise(resolve => setTimeout(resolve, 10000));
+  const css = `
+    body {
+      background-color: red;
+    }
+  `;
+  return reply.send(css);
+});
+
 fastify.listen({ port: 3001 }, (err) => {
   if (err) {
     console.error(err);

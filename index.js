@@ -15,6 +15,13 @@ fastify.register(require('@fastify/compress'));
 // Resource types to block
 const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
 
+// Add blocked JS URLs - will match from end of URL
+const BLOCKED_JS = [
+  'analytics.js',
+  'ga.js',
+  'fbevents.js'
+];
+
 // Add debug flag
 const DEBUG = process.env.DEBUG === 'true';
 const API_KEY = process.env.API_KEY || null;
@@ -173,6 +180,12 @@ async function blockUnsafeUrls(url, reply) {
   return url;
 }
 
+const isMatchesAny = function (url, list) {
+  debugLog(`Checking if ${url} matches any of list`, list);
+  // Filter out empty strings and check if URL ends with any of the patterns
+  return list.filter(Boolean).some(item => url.endsWith(item));
+}
+
 fastify.get('/*', async (request, reply) => {
   const targetUrl = `${request.url}`;
   let url = targetUrl;
@@ -211,6 +224,17 @@ fastify.get('/*', async (request, reply) => {
   const page_timeout_ms = parseInt(request.headers['x-page-timeout-ms']) || DEFAULT_PAGE_TIMEOUT_MS;
   const wait_until_condition = [request.headers['x-wait-until-condition'] || DEFAULT_WAIT_UNTIL_CONDITION];
   const needFreshInstance = Boolean(request.headers['x-need-fresh-instance']) || false;
+  const toBlockJS = request.headers['x-block-js'] || '';
+
+
+
+  const toBlockJSArray = toBlockJS.split(',').filter(Boolean); // Filter out empty strings
+  // merge with default blocked JS
+  const JS_BLOCK_LIST = [...BLOCKED_JS, ...toBlockJSArray];
+
+  debugLog(`wait_until_condition: ${wait_until_condition}`);
+  debugLog(`toBlockJS: ${toBlockJS}`);
+  debugLog(`JS_BLOCK_LIST: ${JS_BLOCK_LIST}`);
 
   //get browser instance
   const browser = await getBrowser(needFreshInstance);
@@ -229,21 +253,24 @@ fastify.get('/*', async (request, reply) => {
     let isRedirected = false;
 
     await page.setRequestInterception(true);
-    page.on('request', request => {
-      const resourceType = request.resourceType();
-      // debugLog(`Resource request: ${resourceType} - ${request.url()}`);
+    page.on('request', childRequest => {
+      const resourceType = childRequest.resourceType();
       // if we already have a redirect response, abort all the request
       if (isRedirected) {
-        request.abort();
-      } else if (request.isNavigationRequest() && request.redirectChain().length > 0) {
-        debugLog(`Redirect detected: ${request.url()}, aborting...`);
+        childRequest.abort();
+      } else if (childRequest.isNavigationRequest() && childRequest.redirectChain().length > 0) {
+        debugLog(`Redirect detected: ${childRequest.url()}, aborting...`);
         isRedirected = true;
-        request.abort();
+        childRequest.abort();
       } else if (BLOCKED_RESOURCES.has(resourceType)) {
-        // debugLog(`Blocked resource: ${resourceType} - ${request.url()}`);
-        request.abort();
+        debugLog(`Blocked resource type ${resourceType}: ${childRequest.url()}`);
+        childRequest.abort();
+      } else if (resourceType === 'script' && isMatchesAny(childRequest.url(), JS_BLOCK_LIST)) {
+        debugLog(`Blocked JS file: ${childRequest.url()}`);
+        childRequest.abort();
       } else {
-        request.continue();
+        // debugLog(`Request allowed: ${childRequest.url()}`);
+        childRequest.continue();
       }
     });
 

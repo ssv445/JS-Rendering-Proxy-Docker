@@ -110,6 +110,7 @@ The following custom headers can be used to control the page rendering behavior:
 | `x-page-timeout-ms`      | Maximum time to wait for page load in milliseconds                                                          | 60000                                                                                                                       |
 | `x-wait-until-condition` | When to consider navigation successful. Options: `load`, `domcontentloaded`, `networkidle0`, `networkidle2` | `networkidle2`                                                                                                              |
 | `x-need-fresh-instance`  | Force creation of a new browser instance                                                                    | `false`                                                                                                                     |
+| `x-block-js`             | Blocks given JS file names (comma seperated), using file names.                                             |
 
 ### CURL Support
 

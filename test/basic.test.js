@@ -84,6 +84,16 @@ describe('Basic Tests', () => {
         expect(response.status).toBe(404);
     }, TEST_TIMEOUT);
 
+    test('block js', async () => {
+        //add header to wait for networkidle0
+        const response = await axiosProxyInstance.get('http://localhost:3001/block-js', {
+            headers: {
+                'x-wait-until-condition': 'networkidle0'
+            }
+        });
+        expect(response.status).toBe(200);
+        expect(response.data).toContain('BlockJSTest');
+    }, TEST_TIMEOUT);
 
 
 }); 
