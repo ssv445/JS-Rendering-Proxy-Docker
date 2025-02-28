@@ -64,25 +64,67 @@ fastify.get('/block-js', async (request, reply) => {
     .send(`
     <html>
       <head>
-        <script src="https://code.jquery.com/jquery.min.js"></script>
-        <script src="https://linkstorm.io/linkstorm_site_linker.js"></script>
-        <script src="https://ssl.google-analytics.com/ga.js"></script>
-        <script src="http://localhost:3001/super-slow.js"></script>
+      <script src="http://localhost:3001/super-blocked.js" onload="document.body.innerHTML = 'super-blocked.js'"></script>
+        <script src="http://localhost:3001/super-fast.js" onload="document.body.innerHTML = 'super-fast.js'"></script>
+        <script src="http://localhost:3001/super-slow.js" onload="document.body.innerHTML = 'super-slow.js'"></script>
         <link rel="stylesheet" href="http://localhost:3001/super-slow.css">
       </head>
+      <body>ORIGINAL BODY</body>
+    </html>
+  `);
+});
+
+fastify.get('/js-execution', async (request, reply) => {
+  console.log('in js-execution');
+  return reply
+    .code(200)
+    .header('Content-Type', 'text/html')
+    .send(`
+    <html>
+      <head>
+        <script>
+          document.body.innerHTML = 'JSExecutionTest';
+        </script>
+      </head>
       <body>
-        BlockJSTest
       </body>
     </html>
   `);
 });
 
+//super fast js
+fastify.get('/super-fast.js', async (request, reply) => {
+  console.log('in super-fast.js');
+  //js should append BlockJSTest to the body
+  //flag content as javascript
+  reply.header('Content-Type', 'application/javascript');
+  const js = `
+    document.body.innerHTML = 'SuperFastJSExecuted';
+    console.log('SuperFastJSExecuted');
+  `;
+  return reply.send(js);
+});
+
 fastify.get('/super-slow.js', async (request, reply) => {
   console.log('in super-slow.js');
   await new Promise(resolve => setTimeout(resolve, 10000));
+  //js should append BlockJSTest to the body
   const js = `
-    console.log('super slow');
+    console.log('SuperSlowJSExecuted'); 
   `;
+  reply.header('Content-Type', 'application/javascript');
+  return reply.send(js);
+});
+
+fastify.get('/super-blocked.js', async (request, reply) => {
+  console.log('in super-blocked.js');
+  await new Promise(resolve => setTimeout(resolve, 10000));
+  //js should append BlockJSTest to the body
+  const js = `
+    console.log('SuperBlockedJSExecuted'); 
+    document.body.innerHTML = 'BlockJSTest';
+  `;
+  reply.header('Content-Type', 'application/javascript');
   return reply.send(js);
 });
 
@@ -94,6 +136,7 @@ fastify.get('/super-slow.css', async (request, reply) => {
       background-color: red;
     }
   `;
+  reply.header('Content-Type', 'text/css');
   return reply.send(css);
 });
 

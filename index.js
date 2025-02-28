@@ -17,9 +17,6 @@ const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
 
 // Add blocked JS URLs - will match from end of URL
 const BLOCKED_JS = [
-  'analytics.js',
-  'ga.js',
-  'fbevents.js'
 ];
 
 // Add debug flag
@@ -181,7 +178,7 @@ async function blockUnsafeUrls(url, reply) {
 }
 
 const isMatchesAny = function (url, list) {
-  debugLog(`Checking if ${url} matches any of list`, list);
+  // debugLog(`Checking if ${url} matches any of list`, list);
   // Filter out empty strings and check if URL ends with any of the patterns
   return list.filter(Boolean).some(item => url.endsWith(item));
 }
@@ -302,12 +299,17 @@ fastify.get('/*', async (request, reply) => {
 
     debugLog(`Page ${url} loaded with status: ${response.status()}`);
 
+
+
     // For redirects, send response without HTML
     if (redirectResponse) {
       await prepareHeader(reply, redirectResponse);
       debugLog('Redirect detected, sending without HTML');
       return reply.code(response.status()).send();
     }
+
+    // Wait additional 2 seconds for JavaScript execution
+    await page.waitForTimeout(500);
 
     // For successful responses, include rendered HTML
     const html = await page.content();
