@@ -31,10 +31,15 @@ function debugLog(...args) {
   }
 }
 
+function errorLog(...args) {
+  console.log('[ERROR]', ...args);
+  console.error(args);
+}
+
 // Browser management
 let browserInstance = null;
 let pageCount = 0;
-const PAGE_LIMIT_PER_BROWSER_INSTANCE = 500;
+const PAGE_LIMIT_PER_BROWSER_INSTANCE = 50;
 const DEFAULT_PAGE_TIMEOUT_MS = 60000;
 const DEFAULT_WAIT_UNTIL_CONDITION = 'networkidle2';
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
@@ -212,7 +217,7 @@ fastify.get('/*', async (request, reply) => {
   try {
     url = await blockUnsafeUrls(url, reply);
   } catch (error) {
-    debugLog('URL blocked by safety checks');
+    errorLog('URL blocked by safety checks');
     return reply.code(error.status).send({ error: error.message });
   }
 
@@ -225,31 +230,29 @@ fastify.get('/*', async (request, reply) => {
 
 
 
-  const toBlockJSArray = toBlockJS.split(',').filter(Boolean); // Filter out empty strings
+  const toBlockJSArray = toBlockJS.split(',');
   // merge with default blocked JS
   const JS_BLOCK_LIST = [...BLOCKED_JS, ...toBlockJSArray];
-
-  debugLog(`wait_until_condition: ${wait_until_condition}`);
-  debugLog(`toBlockJS: ${toBlockJS}`);
-  debugLog(`JS_BLOCK_LIST: ${JS_BLOCK_LIST}`);
-
   //get browser instance
   const browser = await getBrowser(needFreshInstance);
 
   let page;
   try {
     page = await browser.newPage();
-    await page.setUserAgent(userAgent);
+
     // debugLog('New page created');
     if (!page) {
-      debugLog('New page not created');
-      return reply.code(500).send({ error: 'Failed to create page' });
+      errorLog('New page not created');
+      return reply.code(503).send({ error: 'Failed to create page, please try again later' });
     }
+
+    await page.setUserAgent(userAgent);
 
     let redirectResponse = null;
     let isRedirected = false;
 
     await page.setRequestInterception(true);
+
     page.on('request', childRequest => {
       const resourceType = childRequest.resourceType();
       // if we already have a redirect response, abort all the request
@@ -260,13 +263,11 @@ fastify.get('/*', async (request, reply) => {
         isRedirected = true;
         childRequest.abort();
       } else if (BLOCKED_RESOURCES.has(resourceType)) {
-        debugLog(`Blocked resource type ${resourceType}: ${childRequest.url()}`);
         childRequest.abort();
       } else if (resourceType === 'script' && isMatchesAny(childRequest.url(), JS_BLOCK_LIST)) {
         debugLog(`Blocked JS file: ${childRequest.url()}`);
         childRequest.abort();
       } else {
-        // debugLog(`Request allowed: ${childRequest.url()}`);
         childRequest.continue();
       }
     });
@@ -293,46 +294,36 @@ fastify.get('/*', async (request, reply) => {
         debugLog('Returning initial response for redirect');
         return redirectResponse;
       }
-      debugLog(`Navigation error: ${error.message}`);
+      errorLog(`Navigation error: ${error.message}`);
       throw error;
     });
-
-    debugLog(`Page ${url} loaded with status: ${response.status()}`);
-
 
 
     // For redirects, send response without HTML
     if (redirectResponse) {
       await prepareHeader(reply, redirectResponse);
-      debugLog('Redirect detected, sending without HTML');
       return reply.code(response.status()).send();
     }
-
-    // Wait additional 2 seconds for JavaScript execution
-    await page.waitForTimeout(500);
-
     // For successful responses, include rendered HTML
     const html = await page.content();
     await prepareHeader(reply, response);
-    debugLog(`No redirect detected, sending HTML for ${url}: size: ${html.length}`);
     reply.header('Content-Type', 'text/html; charset=utf-8');
     return reply.code(response.status()).send(html);
 
   } catch (error) {
     debugLog(`Error processing request: ${error.message}`);
     if (error.name === 'TimeoutError') {
-      debugLog(`TimeoutError for ${url}`);
+      errorLog(`TimeoutError for ${url}`);
       return reply.code(504).send({ error: 'Gateway Timeout' });
     } else {
-      debugLog(`Error processing request: ${error.name}`);
-      return reply.code(500).send({ error: error.message });
+      errorLog(`Error processing request: ${error.name}`);
+      errorLog(error);
+      return reply.code(503).send({ error: error.message });
     }
   } finally {
     if (page) {
       await page.close();
-      debugLog('Page closed');
     }
-    debugLog(`Request processing completed for ${url}`);
   }
 });
 
@@ -364,13 +355,13 @@ process.on('SIGTERM', async () => {
 });
 
 
-fastify.addHook('onRequest', (request, reply, done) => {
-  debugLog(`>>> Request started for ${request.url}`);
-  done();
-});
+// fastify.addHook('onRequest', (request, reply, done) => {
+//   debugLog(`>>> Request started for ${request.url}`);
+//   done();
+// });
 
-fastify.addHook('onResponse', (request, reply, done) => {
-  const timeTaken = reply.elapsedTime / 1000;
-  debugLog(`<<<< Response Sent for ${request.url} in ${timeTaken} seconds`);
-  done();
-});
+// fastify.addHook('onResponse', (request, reply, done) => {
+//   const timeTaken = reply.elapsedTime / 1000;
+//   debugLog(`<<<< Response Sent for ${request.url} in ${timeTaken} seconds`);
+//   done();
+// });

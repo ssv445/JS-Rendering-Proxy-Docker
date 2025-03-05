@@ -15,7 +15,6 @@ const websites = [
     'https://taqtics.ai/',
     'https://app.advcollective.com/',
     'https://blog.cirquedusoleil.com/',
-    'https://www.therapyroute.com/',
     'https://www.schedulethreads.com/',
 
 ];
