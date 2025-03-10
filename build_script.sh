@@ -6,13 +6,17 @@
 # Get the version number from the package.json file
 version=$(grep -o '"version": "[^"]*"' package.json | cut -d'"' -f4)
 
-# build the docker image for all the platforms
-docker buildx build --platform linux/amd64 -t js-rendering-proxy-docker .
+# Create and use a new builder instance
+docker buildx create --name multiarch --driver docker-container --use || true
+docker buildx inspect --bootstrap
 
-# tag the image with the version number
-docker tag js-rendering-proxy-docker readybytes/js-rendering-proxy-docker:latest
-docker push readybytes/js-rendering-proxy-docker:latest
-
-# tag the image with the version number
-docker tag js-rendering-proxy-docker readybytes/js-rendering-proxy-docker:$version
-docker push readybytes/js-rendering-proxy-docker:$version
+if [ "$1" = "push" ]; then
+    # Build and push for multiple platforms
+    docker buildx build --platform linux/amd64,linux/arm64/v8 \
+        --tag readybytes/js-rendering-proxy-docker:latest \
+        --tag readybytes/js-rendering-proxy-docker:$version \
+        --push .
+else
+    # Local build for current platform
+    docker buildx build --load -t js-rendering-proxy-docker .
+fi

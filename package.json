@@ -1,8 +1,9 @@
 {
   "name": "js-rendering-proxy-docker",
-  "version": "1.0.7",
+  "version": "1.1.1",
   "scripts": {
-    "dev": "DEBUG=true API_KEY=1234567890 node --watch index.js",
+    "debug": "DEBUG=true API_KEY=1234567890 node --watch index.js",
+    "dev": "API_KEY=1234567890 node --watch index.js",
     "start": "node index.js",
     "test:server": "DEBUG=true node --watch test/mockServer.js",
     "test": "jest --config=test/jest.config.js"
@@ -10,7 +11,8 @@
   "dependencies": {
     "@fastify/compress": "^6.0.0",
     "fastify": "^4.19.0",
-    "puppeteer": "^19.7.5"
+    "pm2": "^5.4.3",
+    "puppeteer": "^24"
   },
   "devDependencies": {
     "axios": "^1.4.0",

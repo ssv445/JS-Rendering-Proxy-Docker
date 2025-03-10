@@ -23,6 +23,12 @@ const BLOCKED_JS = [
 const DEBUG = process.env.DEBUG === 'true';
 const API_KEY = process.env.API_KEY || null;
 
+// Add these constants
+const BROWSER_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
+const MEMORY_THRESHOLD_MB = 1000; // 500MB
+
+// Add browser creation timestamp
+let browserCreatedAt = null;
 
 // Add debug logging function
 function debugLog(...args) {
@@ -39,43 +45,100 @@ function errorLog(...args) {
 // Browser management
 let browserInstance = null;
 let pageCount = 0;
-const PAGE_LIMIT_PER_BROWSER_INSTANCE = 50;
+const PAGE_LIMIT_PER_BROWSER_INSTANCE = 10;
 const DEFAULT_PAGE_TIMEOUT_MS = 60000;
 const DEFAULT_WAIT_UNTIL_CONDITION = 'networkidle2';
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
 
-
-// Add browser initialization function
+// Modify getBrowser function
 async function getBrowser(needFreshInstance = false) {
-  if (!browserInstance || pageCount >= PAGE_LIMIT_PER_BROWSER_INSTANCE || needFreshInstance) {
-    //close the browser instance if it exists
-    if (browserInstance) {
-      await browserInstance.close();
+  const currentMemory = process.memoryUsage().heapUsed / 1024 / 1024;
+  const browserAge = browserCreatedAt ? Date.now() - browserCreatedAt : 0;
+
+  // Force new instance if memory high or browser too old
+  needFreshInstance = needFreshInstance ||
+    currentMemory > MEMORY_THRESHOLD_MB ||
+    browserAge > BROWSER_MAX_AGE_MS;
+
+  let retries = 0;
+  while (retries < MAX_RETRIES) {
+    try {
+      if (!browserInstance || pageCount >= PAGE_LIMIT_PER_BROWSER_INSTANCE || needFreshInstance) {
+        if (browserInstance) {
+          try {
+            await browserInstance.close();
+          } catch (err) {
+            debugLog('Error closing browser:', err);
+          }
+        }
+
+        browserInstance = await puppeteer.launch({
+          headless: 'new',
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--ignore-certificate-errors',
+            '--ignore-certificate-errors-spki-list',
+            '--disable-web-security',
+            '--disable-gpu',
+            '--no-zygote',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--disable-canvas-aa',
+            '--disable-2d-canvas-clip-aa',
+            '--disable-gl-drawing-for-tests',
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--disable-background-networking',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-breakpad',
+            '--disable-component-extensions-with-background-pages',
+            '--disable-extensions',
+            '--disable-features=TranslateUI,BlinkGenPropertyTrees',
+            '--disable-ipc-flooding-protection',
+            '--disable-renderer-backgrounding',
+            '--enable-features=NetworkService,NetworkServiceInProcess',
+            '--force-color-profile=srgb',
+            '--metrics-recording-only',
+            '--mute-audio',
+          ],
+          ignoreHTTPSErrors: true,
+          pipe: true, // Use pipe instead of WebSocket
+          dumpio: process.env.DEBUG === 'true' // Log browser process stdout and stderr
+        });
+
+        browserCreatedAt = Date.now();
+        pageCount = 0;
+
+        // Force garbage collection if available
+        if (global.gc) {
+          global.gc();
+        }
+
+        browserInstance.on('disconnected', () => {
+          debugLog('Browser disconnected');
+          browserInstance = null;
+          pageCount = 0;
+        });
+
+        if (!browserInstance) {
+          throw new Error('Failed to create browser instance');
+        }
+
+        // reset retries
+        retries = 0;
+      }
+      return browserInstance;
+    } catch (error) {
+      retries++;
+      debugLog(`Browser creation attempt ${retries} failed:`, error);
+      if (retries === MAX_RETRIES) throw error;
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
     }
-
-    //create a new browser instance
-    browserInstance = await puppeteer.launch({
-      headless: 'new',
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--ignore-certificate-errors',
-        '--ignore-certificate-errors-spki-list',
-        '--disable-web-security'
-      ],
-      ignoreHTTPSErrors: true
-    });
-
-    // if no browser instance is created, throw an error
-    if (!browserInstance) {
-      throw new Error('Failed to create browser instance');
-    }
-
-    pageCount = 0;
   }
-  pageCount++;
-  return browserInstance;
 }
 
 function sanitizeHeaderValue(value) {
@@ -210,6 +273,7 @@ fastify.get('/*', async (request, reply) => {
   if (API_KEY) {
     const apiKey = request.headers['x-api-key'];
     if (apiKey !== API_KEY) {
+      console.error(`Unauthorized request for ${url} with api key: ${apiKey} and expected api key: ${API_KEY}`);
       return reply.code(401).send({ error: 'Unauthorized' });
     }
   }
@@ -233,18 +297,39 @@ fastify.get('/*', async (request, reply) => {
   const toBlockJSArray = toBlockJS.split(',');
   // merge with default blocked JS
   const JS_BLOCK_LIST = [...BLOCKED_JS, ...toBlockJSArray];
-  //get browser instance
-  const browser = await getBrowser(needFreshInstance);
 
   let page;
   try {
-    page = await browser.newPage();
+    const browser = await getBrowser(needFreshInstance);
 
-    // debugLog('New page created');
+    // try to get browser instance for MAX_RETRIES times
+    for (retries = 0; retries < MAX_RETRIES; retries++) {
+      try {
+        page = await browser.newPage();
+        break;
+      } catch (error) {
+        debugLog(`Page creation attempt ${retries} failed:`, error);
+        if (retries === MAX_RETRIES - 1) {
+          throw error;
+        }
+        // wait for 200ms before retrying
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+
     if (!page) {
       errorLog('New page not created');
       return reply.code(503).send({ error: 'Failed to create page, please try again later' });
     }
+
+    // Monitor for page crashes
+    page.on('error', err => {
+      errorLog('Page error:', err);
+    });
+
+    page.on('close', () => {
+      debugLog('Page closed');
+    });
 
     await page.setUserAgent(userAgent);
 
