@@ -23,12 +23,8 @@ const BLOCKED_JS = [
 const DEBUG = process.env.DEBUG === 'true';
 const API_KEY = process.env.API_KEY || null;
 
-// Add these constants
-const BROWSER_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
-const MEMORY_THRESHOLD_MB = 1000; // 500MB
-
-// Add browser creation timestamp
-let browserCreatedAt = null;
+// Add at the top with other globals
+let browser = null;
 
 // Add debug logging function
 function debugLog(...args) {
@@ -43,103 +39,10 @@ function errorLog(...args) {
 }
 
 // Browser management
-let browserInstance = null;
-let pageCount = 0;
-const PAGE_LIMIT_PER_BROWSER_INSTANCE = 10;
 const DEFAULT_PAGE_TIMEOUT_MS = 60000;
 const DEFAULT_WAIT_UNTIL_CONDITION = 'networkidle2';
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000;
 
-// Modify getBrowser function
-async function getBrowser(needFreshInstance = false) {
-  const currentMemory = process.memoryUsage().heapUsed / 1024 / 1024;
-  const browserAge = browserCreatedAt ? Date.now() - browserCreatedAt : 0;
-
-  // Force new instance if memory high or browser too old
-  needFreshInstance = needFreshInstance ||
-    currentMemory > MEMORY_THRESHOLD_MB ||
-    browserAge > BROWSER_MAX_AGE_MS;
-
-  let retries = 0;
-  while (retries < MAX_RETRIES) {
-    try {
-      if (!browserInstance || pageCount >= PAGE_LIMIT_PER_BROWSER_INSTANCE || needFreshInstance) {
-        if (browserInstance) {
-          try {
-            await browserInstance.close();
-          } catch (err) {
-            debugLog('Error closing browser:', err);
-          }
-        }
-
-        browserInstance = await puppeteer.launch({
-          headless: 'new',
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--ignore-certificate-errors',
-            '--ignore-certificate-errors-spki-list',
-            '--disable-web-security',
-            '--disable-gpu',
-            '--no-zygote',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--disable-canvas-aa',
-            '--disable-2d-canvas-clip-aa',
-            '--disable-gl-drawing-for-tests',
-            '--no-first-run',
-            '--no-default-browser-check',
-            '--disable-background-networking',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-breakpad',
-            '--disable-component-extensions-with-background-pages',
-            '--disable-extensions',
-            '--disable-features=TranslateUI,BlinkGenPropertyTrees',
-            '--disable-ipc-flooding-protection',
-            '--disable-renderer-backgrounding',
-            '--enable-features=NetworkService,NetworkServiceInProcess',
-            '--force-color-profile=srgb',
-            '--metrics-recording-only',
-            '--mute-audio',
-          ],
-          ignoreHTTPSErrors: true,
-          pipe: true, // Use pipe instead of WebSocket
-          dumpio: process.env.DEBUG === 'true' // Log browser process stdout and stderr
-        });
-
-        browserCreatedAt = Date.now();
-        pageCount = 0;
-
-        // Force garbage collection if available
-        if (global.gc) {
-          global.gc();
-        }
-
-        browserInstance.on('disconnected', () => {
-          debugLog('Browser disconnected');
-          browserInstance = null;
-          pageCount = 0;
-        });
-
-        if (!browserInstance) {
-          throw new Error('Failed to create browser instance');
-        }
-
-        // reset retries
-        retries = 0;
-      }
-      return browserInstance;
-    } catch (error) {
-      retries++;
-      debugLog(`Browser creation attempt ${retries} failed:`, error);
-      if (retries === MAX_RETRIES) throw error;
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-    }
-  }
-}
 
 function sanitizeHeaderValue(value) {
   if (!value) return '';
@@ -289,33 +192,55 @@ fastify.get('/*', async (request, reply) => {
   const userAgent = request.headers['user-agent'] || DEFAULT_USER_AGENT;
   const page_timeout_ms = parseInt(request.headers['x-page-timeout-ms']) || DEFAULT_PAGE_TIMEOUT_MS;
   const wait_until_condition = [request.headers['x-wait-until-condition'] || DEFAULT_WAIT_UNTIL_CONDITION];
-  const needFreshInstance = Boolean(request.headers['x-need-fresh-instance']) || false;
   const toBlockJS = request.headers['x-block-js'] || '';
-
-
 
   const toBlockJSArray = toBlockJS.split(',');
   // merge with default blocked JS
   const JS_BLOCK_LIST = [...BLOCKED_JS, ...toBlockJSArray];
 
+  let browser;
   let page;
-  try {
-    const browser = await getBrowser(needFreshInstance);
 
-    // try to get browser instance for MAX_RETRIES times
-    for (retries = 0; retries < MAX_RETRIES; retries++) {
-      try {
-        page = await browser.newPage();
-        break;
-      } catch (error) {
-        debugLog(`Page creation attempt ${retries} failed:`, error);
-        if (retries === MAX_RETRIES - 1) {
-          throw error;
-        }
-        // wait for 200ms before retrying
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-    }
+  try {
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--single-process',
+        '--disable-setuid-sandbox',
+        '--ignore-certificate-errors',
+        '--ignore-certificate-errors-spki-list',
+        '--disable-web-security',
+        '--disable-gpu',
+        '--no-zygote',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-canvas-aa',
+        '--disable-2d-canvas-clip-aa',
+        '--disable-gl-drawing-for-tests',
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-background-networking',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-breakpad',
+        '--disable-component-extensions-with-background-pages',
+        '--disable-extensions',
+        '--disable-features=TranslateUI,BlinkGenPropertyTrees',
+        '--disable-ipc-flooding-protection',
+        '--disable-renderer-backgrounding',
+        '--enable-features=NetworkService,NetworkServiceInProcess',
+        '--force-color-profile=srgb',
+        '--metrics-recording-only',
+        '--mute-audio',
+      ],
+      ignoreHTTPSErrors: true,
+      pipe: true, // Use pipe instead of WebSocket
+      // dumpio: process.env.DEBUG === 'true' // Log browser process stdout and stderr
+    });
+
+    page = await browser.newPage();
+
 
     if (!page) {
       errorLog('New page not created');
@@ -325,10 +250,6 @@ fastify.get('/*', async (request, reply) => {
     // Monitor for page crashes
     page.on('error', err => {
       errorLog('Page error:', err);
-    });
-
-    page.on('close', () => {
-      debugLog('Page closed');
     });
 
     await page.setUserAgent(userAgent);
@@ -358,6 +279,12 @@ fastify.get('/*', async (request, reply) => {
     });
 
     page.on('response', response => {
+      // Add null check before accessing response
+      if (!response) {
+        errorLog('No response received from page for url: ', url);
+        return null;
+      }
+
       if (response.url() === url && response.status() >= 300 && response.status() < 400) {
         // its a redirect
         redirectResponse = response;
@@ -409,6 +336,15 @@ fastify.get('/*', async (request, reply) => {
     if (page) {
       await page.close();
     }
+
+    if (browser) {
+      debugLog('Closing browser');
+      await browser.close();
+      if (browser && browser.process() != null) {
+        debugLog('Killing browser process');
+        browser.process().kill('SIGINT');
+      }
+    }
   }
 });
 
@@ -426,27 +362,23 @@ fastify.listen({ port: 3000, host: '0.0.0.0' }, (err) => {
 
 // Cleanup on shutdown
 process.on('SIGINT', async () => {
-  if (browserInstance) {
-    await browserInstance.close();
+  if (browser) {
+    await browser.close();
+    if (browser && browser.process() != null) {
+      debugLog('Killing browser process');
+      browser.process().kill('SIGINT');
+    }
   }
   process.exit();
 });
 
 process.on('SIGTERM', async () => {
-  if (browserInstance) {
-    await browserInstance.close();
+  if (browser) {
+    await browser.close();
+    if (browser && browser.process() != null) {
+      debugLog('Killing browser process');
+      browser.process().kill('SIGINT');
+    }
   }
   process.exit();
 });
-
-
-// fastify.addHook('onRequest', (request, reply, done) => {
-//   debugLog(`>>> Request started for ${request.url}`);
-//   done();
-// });
-
-// fastify.addHook('onResponse', (request, reply, done) => {
-//   const timeTaken = reply.elapsedTime / 1000;
-//   debugLog(`<<<< Response Sent for ${request.url} in ${timeTaken} seconds`);
-//   done();
-// });
