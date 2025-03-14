@@ -55,7 +55,6 @@ const websites = [
     "https://wyomingbuildingsupply.com",
     "https://3vs.co",
     "https://opattack.com",
-    "https://betmaster.com.mx",
     "https://indexcheckr.com",
     "https://www.nitsotech.com",
     "https://www.revefi.com",
@@ -133,10 +132,8 @@ const websites = [
     "https://www.cranesouth.com/",
     "https://bedrockplumbers.com/",
     "https://oklahomalawyer.com/",
-    "https://www.bestnetflixvpn.com/",
     "https://guidesforbrides.co.uk/",
     "https://cybersnowden.com/",
-    "https://1plushealth.com/",
     "https://annocomputatri.net/",
     "https://foogogreen.com/",
     "https://hindastro.com/",
@@ -154,10 +151,6 @@ const websites = [
     "https://gippslander.com.au/",
     "https://retirementforbeginners.net/",
     "https://drchikeclinics.com/",
-    "https://www.hampsteadaesthetics.com/",
-    "https://character.ai/",
-    "https://findcardubai.com/",
-    "https://www.biooptimalsupplements.com/",
     "https://appwrk.com/",
     "https://kissflow.com/workflow/bpm/beginners-guide-to-client-onboarding/",
     "https://designwest.ie/",
@@ -214,13 +207,30 @@ const websites = [
     "https://gcmarketingsupport.com/",
     "https://www.pleasureinjapan.com/blog",
     "https://igni7e.com/blog",
-    "https://ninjawifi.com/en/blog"
+    "https://ninjawifi.com/en/blog",
+    "https://www.biooptimalsupplements.com/",
+    "https://findcardubai.com/",
+    "https://character.ai/",
+    "https://www.hampsteadaesthetics.com/",
+    "https://1plushealth.com/",
+    "https://betmaster.com.mx",
+    "https://www.bestnetflixvpn.com/",
 ];
 
 console.log("Total websites:", websites.length);
 //filter out duplicates
 const uniqueWebsites = [...new Set(websites)];
 console.log("Unique websites:", uniqueWebsites.length);
+
+// split into 5 groups
+const groupedWebsites = [];
+for (let i = 0; i < uniqueWebsites.length; i++) {
+    const groupIndex = Math.floor(i / (uniqueWebsites.length / 5));
+    if (!groupedWebsites[groupIndex]) {
+        groupedWebsites[groupIndex] = [];
+    }
+    groupedWebsites[groupIndex].push(uniqueWebsites[i]);
+}
 
 // Configure axios to use proxy
 const axiosProxyInstance = axios.create({
@@ -236,7 +246,8 @@ const axiosProxyInstance = axios.create({
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
     headers: {
-        'x-api-key': '1234567890'
+        'x-api-key': '1234567890',
+        'x-page-timeout-ms': '5000'
     }
 });
 
@@ -253,27 +264,23 @@ const axiosInstance = axios.create({
     }
 });
 
-describe('Websites Test', () => {
-    beforeAll(async () => {
-        // Check if servers are running
-        // const mockServerResponse = await axiosInstance.get('http://localhost:3001/success');
-        // expect(mockServerResponse.status).toBe(200);
+const testWebsite = async (website) => {
+    try {
+        const startTime = Date.now();
+        const response = await axiosInstance.get('http://localhost:3000/?render_url=' + website);
+        console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}, Error: ${response.data?.error || ''}`);
+        expect(response.status).toBe(200);
+        expect(response.data).toContain('<body');
+    } catch (error) {
+        console.log(`[Website ${website}] Error:`, error.message);
+        throw error;
+    }
+}
 
-        const proxyServerResponse = await axiosInstance.get('http://localhost:3000/ok');
-        expect(proxyServerResponse.status).toBe(200);
-    });
-
-    test.each(uniqueWebsites)('should handle website: %s', async (website) => {
-
-        try {
-            const startTime = Date.now();
-            const response = await axiosInstance.get('http://localhost:3000/?render_url=' + website);
-            // console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}`);
-            expect(response.status).toBe(200);
-            console.log(`[Website ${website}] Tested successfully in ${Date.now() - startTime}ms`);
-        } catch (error) {
-            console.log(`[Website ${website}] Error:`, error.message);
-            throw error;
-        }
-    }, TEST_TIMEOUT);
-});
+module.exports = {
+    axiosProxyInstance,
+    axiosInstance,
+    groupedWebsites,
+    testWebsite,
+    TEST_TIMEOUT
+}

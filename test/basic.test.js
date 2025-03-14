@@ -110,4 +110,14 @@ describe('Basic Tests', () => {
     }, TEST_TIMEOUT);
 
 
+    // a testcase which check if page timesout still get the partial content
+    test('page timeout', async () => {
+        const response = await axiosProxyInstance.get('http://localhost:3001/fast-page-slow-resource', {
+            headers: {
+                'x-page-timeout-ms': '1000'
+            }
+        });
+        expect(response.status).toBe(200);
+        expect(response.data).toContain('fast-page-slow-resource');
+    }, TEST_TIMEOUT);
 }); 

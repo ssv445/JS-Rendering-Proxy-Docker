@@ -1,9 +1,9 @@
 const config = {
     testTimeout: 35000,
     testEnvironment: 'node',
-    maxWorkers: 2,
+    maxWorkers: 5,
     verbose: true,
-    testMatch: ['**/website.test.js'],
+    // testMatch: ['**/basic.test.js'],
 }
 
 module.exports = config;

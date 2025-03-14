@@ -140,6 +140,24 @@ fastify.get('/super-slow.css', async (request, reply) => {
   return reply.send(css);
 });
 
+fastify.get('/fast-page-slow-resource', async (request, reply) => {
+  console.log('in fast-page-slow-resource');
+  return reply
+    .code(200)
+    .header('Content-Type', 'text/html')
+    .send(`
+    <html>
+      <head>
+        <script src="http://localhost:3001/super-slow.js" onload="document.body.innerHTML = 'super-slow.js'"></script>
+        <link rel="stylesheet" href="http://localhost:3001/super-slow.css">
+      </head>
+      <body>
+      ORIGINAL BODY: fast-page-slow-resource
+      </body>
+    </html>
+  `);
+});
+
 fastify.listen({ port: 3001 }, (err) => {
   if (err) {
     console.error(err);

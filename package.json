@@ -1,6 +1,6 @@
 {
   "name": "js-rendering-proxy-docker",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "scripts": {
     "debug": "DEBUG=true API_KEY=1234567890 node --watch index.js",
     "dev": "API_KEY=1234567890 node --watch index.js",
@@ -11,7 +11,6 @@
   "dependencies": {
     "@fastify/compress": "^6.0.0",
     "fastify": "^4.19.0",
-    "pm2": "^5.4.3",
     "puppeteer": "^24"
   },
   "devDependencies": {

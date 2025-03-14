@@ -198,55 +198,63 @@ fastify.get('/*', async (request, reply) => {
   // merge with default blocked JS
   const JS_BLOCK_LIST = [...BLOCKED_JS, ...toBlockJSArray];
 
-  let browser;
-  let page;
+  const BROWSER_TIMEOUT = 10000;
+
+  const browser = await puppeteer.launch({
+    timeout: BROWSER_TIMEOUT,
+    headless: 'new',
+    args: [
+      '--no-sandbox',
+      '--single-process',
+      '--disable-setuid-sandbox',
+      '--ignore-certificate-errors',
+      '--ignore-certificate-errors-spki-list',
+      '--disable-web-security',
+      '--disable-gpu',
+      '--no-zygote',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--disable-canvas-aa',
+      '--disable-2d-canvas-clip-aa',
+      '--disable-gl-drawing-for-tests',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-background-networking',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-breakpad',
+      '--disable-component-extensions-with-background-pages',
+      '--disable-extensions',
+      '--disable-features=TranslateUI,BlinkGenPropertyTrees',
+      '--disable-ipc-flooding-protection',
+      '--disable-renderer-backgrounding',
+      '--enable-features=NetworkService,NetworkServiceInProcess',
+      '--force-color-profile=srgb',
+      '--metrics-recording-only',
+      '--mute-audio',
+    ],
+    ignoreHTTPSErrors: true,
+    pipe: true, // Use pipe instead of WebSocket
+  });
+
+  if (!browser) {
+    errorLog('Browser not created');
+    return reply.code(503).send({ error: 'Failed to create browser, please try again later' });
+  }
+
+  const page = await browser.newPage();
+  if (!page) {
+    errorLog('New page not created');
+    await closePageAndBrowser(null, browser);
+    return reply.code(503).send({ error: 'Failed to create page, please try again later' });
+  }
+
+  setTimeout(async () => {
+    debugLog('Closing page and browser for url on timeout: ', url);
+    await closePageAndBrowser(page, browser);
+  }, page_timeout_ms + 5000);
 
   try {
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: [
-        '--no-sandbox',
-        '--single-process',
-        '--disable-setuid-sandbox',
-        '--ignore-certificate-errors',
-        '--ignore-certificate-errors-spki-list',
-        '--disable-web-security',
-        '--disable-gpu',
-        '--no-zygote',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-canvas-aa',
-        '--disable-2d-canvas-clip-aa',
-        '--disable-gl-drawing-for-tests',
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--disable-background-networking',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-breakpad',
-        '--disable-component-extensions-with-background-pages',
-        '--disable-extensions',
-        '--disable-features=TranslateUI,BlinkGenPropertyTrees',
-        '--disable-ipc-flooding-protection',
-        '--disable-renderer-backgrounding',
-        '--enable-features=NetworkService,NetworkServiceInProcess',
-        '--force-color-profile=srgb',
-        '--metrics-recording-only',
-        '--mute-audio',
-      ],
-      ignoreHTTPSErrors: true,
-      pipe: true, // Use pipe instead of WebSocket
-      // dumpio: process.env.DEBUG === 'true' // Log browser process stdout and stderr
-    });
-
-    page = await browser.newPage();
-
-
-    if (!page) {
-      errorLog('New page not created');
-      return reply.code(503).send({ error: 'Failed to create page, please try again later' });
-    }
-
     // Monitor for page crashes
     page.on('error', err => {
       errorLog('Page error:', err);
@@ -287,6 +295,7 @@ fastify.get('/*', async (request, reply) => {
 
       if (response.url() === url && response.status() >= 300 && response.status() < 400) {
         // its a redirect
+        debugLog(`Redirect detected: ${response.url()}`);
         redirectResponse = response;
         isRedirected = true;
       }
@@ -298,24 +307,49 @@ fastify.get('/*', async (request, reply) => {
     // await page.setExtraHTTPHeaders(request.headers);
 
     // Navigate with timeout
-    const response = await page.goto(url, {
-      waitUntil: wait_until_condition,
-      timeout: page_timeout_ms
-    }).catch(error => {
-      if (isRedirected && redirectResponse) {
-        debugLog('Returning initial response for redirect');
-        return redirectResponse;
-      }
-      errorLog(`Navigation error: ${error.message}`);
-      throw error;
-    });
-
-
-    // For redirects, send response without HTML
-    if (redirectResponse) {
-      await prepareHeader(reply, redirectResponse);
-      return reply.code(response.status()).send();
+    let error = null;
+    let response = null;
+    try {
+      [error, response] = await Promise.all([
+        page.waitForNavigation({ waitUntil: wait_until_condition, timeout: page_timeout_ms }).then(() => { }).catch(err => err),
+        page.goto(url),
+      ]);
+    } catch (err) {
+      error = err;
     }
+
+    if (isRedirected && redirectResponse) {
+      debugLog('Returning initial response for redirect');
+      // For redirects, send response without HTML
+      if (redirectResponse) {
+        await prepareHeader(reply, redirectResponse);
+        return reply.code(redirectResponse.status()).send();
+      }
+    }
+
+
+    if (error) {
+      // handle timeout error
+      if (error.name === 'TimeoutError') {
+        const html = await page.content();
+
+        // have some content
+        if (html && html.length > 0) {
+          debugLog('Returning partial content for timeout');
+          reply.header('Content-Type', 'text/html; charset=utf-8');
+          reply.header('X-Timeout-Warning', 'Page load timed out but partial content was retrieved');
+          return reply.code(200).send(html);
+        } else {
+          errorLog(`Page load timed out for ${url} timeout: ${page_timeout_ms}, No content returned`);
+          return reply.code(504).send({ error: 'Gateway Timeout' });
+        }
+      }
+
+      // other errors
+      errorLog(`Navigation error: ${error.message} for url: ${url}`);
+      throw error;
+    }
+
     // For successful responses, include rendered HTML
     const html = await page.content();
     await prepareHeader(reply, response);
@@ -323,30 +357,37 @@ fastify.get('/*', async (request, reply) => {
     return reply.code(response.status()).send(html);
 
   } catch (error) {
-    debugLog(`Error processing request: ${error.message}`);
-    if (error.name === 'TimeoutError') {
-      errorLog(`TimeoutError for ${url}`);
-      return reply.code(504).send({ error: 'Gateway Timeout' });
-    } else {
-      errorLog(`Error processing request: ${error.name}`);
-      errorLog(error);
-      return reply.code(503).send({ error: error.message });
-    }
-  } finally {
-    if (page) {
-      await page.close();
-    }
+    errorLog(`Error processing request: ${error.name}`);
+    errorLog(error);
+    return reply.code(503).send({
+      error: `${error.name}: ${error.message}`
+    });
 
-    if (browser) {
-      debugLog('Closing browser');
-      await browser.close();
-      if (browser && browser.process() != null) {
-        debugLog('Killing browser process');
-        browser.process().kill('SIGINT');
-      }
-    }
+  } finally {
+    // debugLog('Closing page and browser for url: ', url);
+    await closePageAndBrowser(page, browser);
   }
 });
+
+async function closePageAndBrowser(page, browser) {
+
+  if (page) {
+    // Close main page
+    await page.close().catch(e => { });
+
+  }
+
+  if (browser) {
+    if (!browser.closed) {
+      debugLog('Closing browser');
+      await browser.close().catch(e => { });
+    }
+    if (browser && browser.process() != null && !browser.process().killed) {
+      debugLog('Killing browser process');
+      browser.process().kill('SIGINT');
+    }
+  }
+}
 
 
 
@@ -354,31 +395,94 @@ fastify.listen({ port: 3000, host: '0.0.0.0' }, (err) => {
   if (err) {
     console.error(err);
     fastify.log.error(err);
+
+    if (browser && browser.process() != null) {
+      debugLog('Killing browser process');
+      browser.process().kill('SIGINT');
+    }
+
     process.exit(1);
   }
   console.log('Server running on port 3000');
 });
 
 
-// Cleanup on shutdown
-process.on('SIGINT', async () => {
-  if (browser) {
-    await browser.close();
-    if (browser && browser.process() != null) {
-      debugLog('Killing browser process');
-      browser.process().kill('SIGINT');
-    }
+const { exec, execSync } = require('child_process');
+
+// Add these functions
+function getZombieProcesses() {
+  try {
+    // Find chrome processes that are zombies (defunct)
+    const cmd = "ps aux | grep chrome | grep defunct | awk '{print $2}'";
+    return execSync(cmd).toString().trim().split('\n').filter(Boolean);
+  } catch (error) {
+    debugLog('Error getting zombie processes:', error);
+    return [];
   }
+}
+
+function getOrphanedChromeProcesses() {
+  try {
+    // Find chrome processes running longer than 5 minutes
+    const cmd = "ps -eo pid,etimes,cmd | grep chrom | grep -v grep | awk '$2 > 300 {print $1}'";
+    return execSync(cmd).toString().trim().split('\n').filter(Boolean);
+  } catch (error) {
+    debugLog('Error getting orphaned processes:', error);
+    return [];
+  }
+}
+
+async function cleanupChromeProcesses() {
+  try {
+    // Kill zombie processes
+    const zombies = getZombieProcesses();
+    if (zombies.length) {
+      debugLog(`Found ${zombies.length} zombie chrome processes`);
+      zombies.forEach(pid => {
+        try {
+          process.kill(parseInt(pid), 'SIGKILL');
+          debugLog(`Killed zombie process ${pid}`);
+        } catch (e) {
+          if (e.code !== 'ESRCH') {
+            debugLog(`Failed to kill zombie ${pid}:`, e);
+          }
+        }
+      });
+    }
+
+    // Kill orphaned processes
+    const orphaned = getOrphanedChromeProcesses();
+    if (orphaned.length) {
+      debugLog(`Found ${orphaned.length} orphaned chrome processes`);
+      orphaned.forEach(pid => {
+        try {
+          process.kill(parseInt(pid), 'SIGKILL');
+          debugLog(`Killed orphaned process ${pid}`);
+        } catch (e) {
+          debugLog(`Failed to kill orphaned ${pid}:`, e);
+        }
+      });
+    }
+
+    // // Cleanup any remaining headless chrome instances
+    // exec('pkill -f "(chrome)?(--headless)"', (err) => {
+    //   if (err && err.code !== 1) debugLog('Chrome cleanup error:', err);
+    // });
+  } catch (error) {
+    debugLog('Cleanup error:', error);
+  }
+}
+
+// Run cleanup every minute
+setInterval(cleanupChromeProcesses, 60000);
+
+// Also run cleanup on process exit
+process.on('SIGINT', async () => {
+  await cleanupChromeProcesses();
   process.exit();
 });
 
 process.on('SIGTERM', async () => {
-  if (browser) {
-    await browser.close();
-    if (browser && browser.process() != null) {
-      debugLog('Killing browser process');
-      browser.process().kill('SIGINT');
-    }
-  }
+  await cleanupChromeProcesses();
   process.exit();
 });
