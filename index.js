@@ -486,3 +486,38 @@ process.on('SIGTERM', async () => {
   await cleanupChromeProcesses();
   process.exit();
 });
+
+
+// Track request start times
+const requestTimes = new Map();
+const SERVER_NAME = process.env.SERVER_NAME || 'proxy-server';
+
+fastify.addHook('onRequest', (request, reply, done) => {
+  requestTimes.set(request.id, process.hrtime());
+  done();
+});
+
+// read from env
+
+fastify.addHook('onResponse', (request, reply) => {
+  const startTime = requestTimes.get(request.id);
+  const [seconds, nanoseconds] = process.hrtime(startTime);
+  const timeTaken = (seconds * 1000 + nanoseconds / 1e6).toFixed(2); // Convert to ms
+  requestTimes.delete(request.id);
+
+
+
+  const logData = {
+    RENDER_LOGS: SERVER_NAME,
+    status: reply.statusCode,
+    time: `${timeTaken}ms`,
+    url: request.query.render_url || request.url,
+  };
+
+  if (reply.raw._error?.message) {
+    logData.error = reply.raw._error?.message;
+  }
+
+  const LOG_STRING = JSON.stringify(logData);
+  console.log(LOG_STRING);
+});
