@@ -257,12 +257,13 @@ fastify.get('/*', async (request, reply) => {
   setTimeout(async () => {
     debugLog('Closing page for url on timeout: ', url);
     await closePageAndBrowser(page);
-  }, page_timeout_ms + 1000);
+  }, page_timeout_ms + 10000);
 
   try {
     // Monitor for page crashes
     page.on('error', err => {
       errorLog('Page error:', err);
+      throw err;
     });
 
     await page.setUserAgent(userAgent);

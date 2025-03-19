@@ -120,4 +120,17 @@ describe('Basic Tests', () => {
         expect(response.status).toBe(200);
         expect(response.data).toContain('fast-page-slow-resource');
     }, TEST_TIMEOUT);
+
+    //test when more than 10 requests are made at the same time, then server should send 429
+    test('multiple requests', async () => {
+        const promises = [];
+        for (let i = 0; i < 30; i++) {
+            promises.push(axiosProxyInstance.get('http://localhost:3001/success'));
+        }
+        const responses = await Promise.all(promises);
+        // some of the responses should be 429
+        const fourTwentyNineResponses = responses.filter(response => response.status === 429);
+        expect(fourTwentyNineResponses.length).toBeGreaterThan(0);
+        expect(fourTwentyNineResponses.length).toBeLessThan(responses.length);
+    }, TEST_TIMEOUT);
 }); 
