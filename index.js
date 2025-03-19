@@ -61,9 +61,9 @@ const CORE_FLAGS = [
   '--no-zygote',                    // Better for containerized environments
 
   // Memory optimization
-  '--single-process',               // Reduces memory usage
-  '--disable-extensions',           // Reduces overhead
-  '--disable-background-networking', // Reduces background activity
+  // '--single-process',               // Reduces memory usage
+  // '--disable-extensions',           // Reduces overhead
+  // '--disable-background-networking', // Reduces background activity
 ];
 
 let browserInstance = null;
@@ -317,7 +317,7 @@ fastify.get('/*', async (request, reply) => {
     try {
       [error, response] = await Promise.all([
         page.waitForNavigation({ waitUntil: wait_until_condition, timeout: page_timeout_ms }).then(() => { }).catch(err => err),
-        page.goto(url),
+        page.goto(url)
       ]);
     } catch (err) {
       error = err;
