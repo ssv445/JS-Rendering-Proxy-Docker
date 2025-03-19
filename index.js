@@ -1,6 +1,9 @@
-const puppeteer = require('puppeteer');
-const { URL } = require('url');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
 
+const { URL } = require('url');
+const { exec, execSync } = require('child_process');
 const fastify = require('fastify')({
   logger: true,
   // Add compression support
@@ -23,8 +26,7 @@ const BLOCKED_JS = [
 const DEBUG = process.env.DEBUG === 'true';
 const API_KEY = process.env.API_KEY || null;
 
-// Add at the top with other globals
-let browser = null;
+
 
 // Add debug logging function
 function debugLog(...args) {
@@ -42,6 +44,43 @@ function errorLog(...args) {
 const DEFAULT_PAGE_TIMEOUT_MS = 60000;
 const DEFAULT_WAIT_UNTIL_CONDITION = 'networkidle2';
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+
+
+const BROWSER_TIMEOUT = 5000;
+// Essential flags
+const CORE_FLAGS = [
+  '--no-sandbox',                    // Required for running in Docker/CI
+  '--disable-setuid-sandbox',        // Required with no-sandbox
+  '--disable-web-security',          // Bypass CORS and other security (use with caution)
+  '--disable-blink-features=AutomationControlled',  // Critical for bot detection bypass
+  '--window-size=1920,1080',        // Makes browser look more realistic
+
+  // Performance flags
+  '--disable-gpu',                   // Reduces resource usage
+  '--disable-dev-shm-usage',        // Prevents crashes in limited memory environments
+  '--no-zygote',                    // Better for containerized environments
+
+  // Memory optimization
+  '--single-process',               // Reduces memory usage
+  '--disable-extensions',           // Reduces overhead
+  '--disable-background-networking', // Reduces background activity
+];
+
+let browserInstance = null;
+async function getBrowser() {
+  if (!browserInstance) {
+    debugLog('Creating browser');
+    browserInstance = await puppeteer.launch({
+      timeout: BROWSER_TIMEOUT,
+      headless: 'new',
+      args: CORE_FLAGS,
+      ignoreHTTPSErrors: true,
+      pipe: true, // Use pipe instead of WebSocket
+    });
+  }
+
+  return browserInstance;
+}
 
 
 function sanitizeHeaderValue(value) {
@@ -64,6 +103,10 @@ function sanitizeHeaderValue(value) {
 }
 
 async function prepareHeader(reply, response) {
+  if (!response) {
+    return;
+  }
+
   try {
     debugLog(`Preparing Header for response.url: ${response.url()}`);
     const headers = response.headers();
@@ -198,61 +241,23 @@ fastify.get('/*', async (request, reply) => {
   // merge with default blocked JS
   const JS_BLOCK_LIST = [...BLOCKED_JS, ...toBlockJSArray];
 
-  const BROWSER_TIMEOUT = 10000;
-
-  const browser = await puppeteer.launch({
-    timeout: BROWSER_TIMEOUT,
-    headless: 'new',
-    args: [
-      '--no-sandbox',
-      '--single-process',
-      '--disable-setuid-sandbox',
-      '--ignore-certificate-errors',
-      '--ignore-certificate-errors-spki-list',
-      '--disable-web-security',
-      '--disable-gpu',
-      '--no-zygote',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--disable-canvas-aa',
-      '--disable-2d-canvas-clip-aa',
-      '--disable-gl-drawing-for-tests',
-      '--no-first-run',
-      '--no-default-browser-check',
-      '--disable-background-networking',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-breakpad',
-      '--disable-component-extensions-with-background-pages',
-      '--disable-extensions',
-      '--disable-features=TranslateUI,BlinkGenPropertyTrees',
-      '--disable-ipc-flooding-protection',
-      '--disable-renderer-backgrounding',
-      '--enable-features=NetworkService,NetworkServiceInProcess',
-      '--force-color-profile=srgb',
-      '--metrics-recording-only',
-      '--mute-audio',
-    ],
-    ignoreHTTPSErrors: true,
-    pipe: true, // Use pipe instead of WebSocket
-  });
+  const browser = await getBrowser();
 
   if (!browser) {
     errorLog('Browser not created');
     return reply.code(503).send({ error: 'Failed to create browser, please try again later' });
   }
-
   const page = await browser.newPage();
   if (!page) {
     errorLog('New page not created');
-    await closePageAndBrowser(null, browser);
+    // await closePageAndBrowser(null, browser);
     return reply.code(503).send({ error: 'Failed to create page, please try again later' });
   }
 
   setTimeout(async () => {
-    debugLog('Closing page and browser for url on timeout: ', url);
-    await closePageAndBrowser(page, browser);
-  }, page_timeout_ms + 5000);
+    debugLog('Closing page for url on timeout: ', url);
+    await closePageAndBrowser(page);
+  }, page_timeout_ms + 1000);
 
   try {
     // Monitor for page crashes
@@ -351,6 +356,14 @@ fastify.get('/*', async (request, reply) => {
     }
 
     // For successful responses, include rendered HTML
+    if (!response) {
+      throw new Error('No response received');
+    }
+
+    if (page.isClosed()) {
+      throw new Error('Page is closed');
+    }
+
     const html = await page.content();
     await prepareHeader(reply, response);
     reply.header('Content-Type', 'text/html; charset=utf-8');
@@ -364,17 +377,19 @@ fastify.get('/*', async (request, reply) => {
     });
 
   } finally {
-    // debugLog('Closing page and browser for url: ', url);
-    await closePageAndBrowser(page, browser);
+    await closePageAndBrowser(page);
   }
 });
 
 async function closePageAndBrowser(page, browser) {
 
-  if (page) {
-    // Close main page
-    await page.close().catch(e => { });
-
+  try {
+    if (page && !page.isClosed()) {
+      await page.removeAllListeners().catch(() => { });
+      await page.close().catch(() => { });
+    }
+  } catch (error) {
+    debugLog('Error in closePageAndBrowser:', error);
   }
 
   if (browser) {
@@ -388,6 +403,8 @@ async function closePageAndBrowser(page, browser) {
     }
   }
 }
+// the first time it runs, it should clean up all the chrome processes
+cleanupChromeProcesses();
 
 
 
@@ -396,18 +413,10 @@ fastify.listen({ port: 3000, host: '0.0.0.0' }, (err) => {
     console.error(err);
     fastify.log.error(err);
 
-    if (browser && browser.process() != null) {
-      debugLog('Killing browser process');
-      browser.process().kill('SIGINT');
-    }
-
     process.exit(1);
   }
   console.log('Server running on port 3000');
 });
-
-
-const { exec, execSync } = require('child_process');
 
 // Add these functions
 function getZombieProcesses() {
@@ -491,21 +500,30 @@ process.on('SIGTERM', async () => {
 // Track request start times
 const requestTimes = new Map();
 const SERVER_NAME = process.env.SERVER_NAME || 'proxy-server';
+const MAX_CONCURRENT_REQUESTS = process.env.MAX_CONCURRENT_REQUESTS || 10; // Adjust as needed
+let activeRequests = 0;
 
 fastify.addHook('onRequest', (request, reply, done) => {
   requestTimes.set(request.id, process.hrtime());
+  if (activeRequests >= MAX_CONCURRENT_REQUESTS) {
+    reply.status(429).send({ error: 'Too many requests, try again later' });
+    return;
+  }
+  activeRequests++;
+
   done();
 });
 
 // read from env
 
 fastify.addHook('onResponse', (request, reply) => {
+
+  activeRequests--;
+
   const startTime = requestTimes.get(request.id);
   const [seconds, nanoseconds] = process.hrtime(startTime);
   const timeTaken = (seconds * 1000 + nanoseconds / 1e6).toFixed(2); // Convert to ms
   requestTimes.delete(request.id);
-
-
 
   const logData = {
     RENDER_LOGS: SERVER_NAME,
