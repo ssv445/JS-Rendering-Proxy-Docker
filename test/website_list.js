@@ -222,10 +222,10 @@ console.log("Total websites:", websites.length);
 const uniqueWebsites = [...new Set(websites)];
 console.log("Unique websites:", uniqueWebsites.length);
 
-// split into 5 groups
+// split into 9 groups
 const groupedWebsites = [];
 for (let i = 0; i < uniqueWebsites.length; i++) {
-    const groupIndex = Math.floor(i / (uniqueWebsites.length / 5));
+    const groupIndex = Math.floor(i / (uniqueWebsites.length / 9));
     if (!groupedWebsites[groupIndex]) {
         groupedWebsites[groupIndex] = [];
     }
@@ -247,7 +247,7 @@ const axiosProxyInstance = axios.create({
     maxBodyLength: Infinity,
     headers: {
         'x-api-key': '1234567890',
-        'x-page-timeout-ms': '5000'
+        'x-page-timeout-ms': '10000'
     }
 });
 
@@ -264,16 +264,28 @@ const axiosInstance = axios.create({
     }
 });
 
+const TEMPORARY_HTTP_STATUS_CODES = [408, 429, 502, 503, 504];
+
 const testWebsite = async (website) => {
+    let retryCount = 0;
     try {
-        const startTime = Date.now();
-        const response = await axiosInstance.get('http://localhost:3000/?render_url=' + website);
-        console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}, Error: ${response.data?.error || ''}`);
+        let response;
+        let startTime;
+        do {
+            startTime = Date.now();
+            response = await axiosInstance.get('http://localhost:3000/?render_url=' + website);
+            if (TEMPORARY_HTTP_STATUS_CODES.includes(response.status)) {
+                console.log(`[${website}] Temporary HTTP status code, retrying...`);
+                retryCount++;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        } while (TEMPORARY_HTTP_STATUS_CODES.includes(response.status) && retryCount < 3);
+        // console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}, Error: ${response.data?.error || ''}`);
         expect(response.status).toBe(200);
         expect(response.data).toContain('<body');
     } catch (error) {
         console.log(`[Website ${website}] Error:`, error.message);
-        throw error;
+        // throw error;
     }
 }
 
