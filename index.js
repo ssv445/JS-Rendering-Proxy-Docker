@@ -524,18 +524,21 @@ fastify.addHook('onResponse', (request, reply) => {
   const timeTaken = (seconds * 1000 + nanoseconds / 1e6).toFixed(2); // Convert to ms
   requestTimes.delete(request.id);
 
-  const logData = {
-    RENDER_LOGS: SERVER_NAME,
-    status: reply.statusCode,
-    time: `${timeTaken}ms`,
-    url: request.query.render_url || request.url,
-    start_time: startTime,
-  };
+  if (request.query.render_url) {
+    const logData = {
+      RENDER_LOGS: SERVER_NAME,
+      status: reply.statusCode,
+      time: `${timeTaken}ms`,
+      url: request.query.render_url,
+      time: Date.now(),
+      start_time: startTime,
+    };
 
-  if (reply.raw._error?.message) {
-    logData.error = reply.raw._error?.message;
+    if (reply.raw._error?.message) {
+      logData.error = reply.raw._error?.message;
+    }
+
+    const LOG_STRING = JSON.stringify(logData);
+    console.log(LOG_STRING);
   }
-
-  const LOG_STRING = JSON.stringify(logData);
-  console.log(LOG_STRING);
 });
