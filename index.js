@@ -71,7 +71,6 @@ async function getBrowser() {
   if (!browserInstance) {
     debugLog('Creating browser');
     browserInstance = await puppeteer.launch({
-      timeout: BROWSER_TIMEOUT,
       headless: 'new',
       args: CORE_FLAGS,
       ignoreHTTPSErrors: true,
@@ -530,6 +529,7 @@ fastify.addHook('onResponse', (request, reply) => {
     status: reply.statusCode,
     time: `${timeTaken}ms`,
     url: request.query.render_url || request.url,
+    start_time: startTime,
   };
 
   if (reply.raw._error?.message) {
