@@ -61,24 +61,60 @@ const CORE_FLAGS = [
   '--no-zygote',                    // Better for containerized environments
 
   // Memory optimization
-  // '--single-process',               // Reduces memory usage
+  '--single-process',               // Reduces memory usage
   // '--disable-extensions',           // Reduces overhead
   // '--disable-background-networking', // Reduces background activity
 ];
 
 let browserInstance = null;
 async function getBrowser() {
-  if (!browserInstance) {
-    debugLog('Creating browser');
-    browserInstance = await puppeteer.launch({
-      headless: 'new',
-      args: CORE_FLAGS,
-      ignoreHTTPSErrors: true,
-      pipe: true, // Use pipe instead of WebSocket
-    });
-  }
+  try {
+    // Check if browser exists and is actually connected
+    if (!browserInstance || !browserInstance.isConnected()) {
+      // Cleanup old instance if it exists
+      if (browserInstance) {
+        try {
+          await browserInstance.close();
+        } catch (e) {
+          debugLog('Error closing old browser:', e);
+        }
+        browserInstance = null;
+      }
 
-  return browserInstance;
+      // Create new browser with retry logic
+      for (let i = 0; i < 3; i++) {
+        try {
+          browserInstance = await puppeteer.launch({
+            headless: 'new',
+            args: CORE_FLAGS,
+            ignoreHTTPSErrors: true,
+            pipe: true,
+          });
+          break;
+        } catch (e) {
+          debugLog(`Browser launch attempt ${i + 1} failed:`, e);
+          await new Promise(r => setTimeout(r, 1000)); // Wait before retry
+        }
+      }
+
+      if (!browserInstance) {
+        throw new Error('Failed to launch browser after retries');
+      }
+
+      // Add disconnect handler
+      browserInstance.on('disconnected', () => {
+        debugLog('Browser disconnected, will recreate on next request');
+        browserInstance = null;
+      });
+    }
+
+    return browserInstance;
+  } catch (err) {
+    errorLog('Browser creation failed:', err);
+    browserInstance = null;
+    process.exit(1);
+    throw err;
+  }
 }
 
 
@@ -203,7 +239,15 @@ fastify.get('/*', async (request, reply) => {
   //request url does not start with http
   if (!request.url.startsWith('http')) {
     if (targetUrl === '/ok') {
-      return reply.code(200).send('ok');
+      try {
+        const browser = await getBrowser();
+        if (!browser || !browser.isConnected()) {
+          throw new Error('Browser not connected');
+        }
+        return reply.code(200).send({ status: 'ok' });
+      } catch (e) {
+        return reply.code(503).send({ status: 'error', message: e.message });
+      }
     }
 
     //user can pass URL as query param also, but not a request as proxy url
