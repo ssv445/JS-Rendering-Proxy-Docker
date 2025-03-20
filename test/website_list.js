@@ -196,7 +196,7 @@ const websites = [
     "https://foyr.com/",
     "https://wordpresswebsitesupport.com.au/",
     "https://www.w2gositeservices.com/",
-    "https://africacenter.org/",
+    "https://africacenter.org",
     "https://theawakeningofdeath.com/",
     "https://flymetothesun.eu/",
     "https://operandio.com/restaurant-standards/",
@@ -214,10 +214,10 @@ const websites = [
     "https://www.bestnetflixvpn.com/",
 ];
 
-console.log("Total websites:", websites.length);
+// console.log("Total websites:", websites.length);
 //filter out duplicates
 const uniqueWebsites = [...new Set(websites)];
-console.log("Unique websites:", uniqueWebsites.length);
+// console.log("Unique websites:", uniqueWebsites.length);
 
 // split into 9 groups
 const groupedWebsites = [];
@@ -251,13 +251,13 @@ const axiosProxyInstance = axios.create({
 const axiosInstance = axios.create({
     validateStatus: () => true,
     maxRedirects: 0,
-    timeout: 1000,
     maxRedirects: 0,
     timeout: 31000,
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
     headers: {
-        'x-api-key': '1234567890'
+        'x-api-key': '1234567890',
+        'x-page-timeout-ms': '10000'
     }
 });
 
@@ -272,7 +272,7 @@ const testWebsite = async (website) => {
             startTime = Date.now();
             response = await axiosInstance.get('http://localhost:3000/?render_url=' + website);
             if (TEMPORARY_HTTP_STATUS_CODES.includes(response.status)) {
-                console.log(`[${website}] Temporary HTTP status code, retrying...`);
+                // console.log(`[${website}] Temporary HTTP status code, retrying...`);
                 retryCount++;
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }

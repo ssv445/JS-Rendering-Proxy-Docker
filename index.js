@@ -333,6 +333,9 @@ fastify.get('/*', async (request, reply) => {
       }
     }
 
+    if (page.isClosed()) {
+      throw new Error('Page is closed');
+    }
 
     if (error) {
       // handle timeout error
@@ -359,10 +362,6 @@ fastify.get('/*', async (request, reply) => {
     // For successful responses, include rendered HTML
     if (!response) {
       throw new Error('No response received');
-    }
-
-    if (page.isClosed()) {
-      throw new Error('Page is closed');
     }
 
     const html = await page.content();
