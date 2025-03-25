@@ -1,5 +1,5 @@
 # Use the official Node.js image for development
-FROM node:18-bookworm
+FROM node:22-bookworm
 
 ENV \
     # Configure default locale (important for chrome-headless-shell).
