@@ -24,6 +24,7 @@ RUN apt-get update &&  apt-get install -y chromium
 
 # Set Puppeteer to use Chromium instead of Chrome
 # ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Create and set working directory
 WORKDIR /app

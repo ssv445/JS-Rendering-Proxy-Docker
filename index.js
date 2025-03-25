@@ -25,7 +25,7 @@ const BLOCKED_JS = [
 // Add debug flag
 const DEBUG = process.env.DEBUG === 'true';
 const API_KEY = process.env.API_KEY || null;
-
+const EXECUTABLE_PATH = process.env.EXECUTABLE_PATH || '/usr/bin/chromium';
 
 
 // Add debug logging function
@@ -89,7 +89,7 @@ async function getBrowser() {
             args: CORE_FLAGS,
             ignoreHTTPSErrors: true,
             pipe: false,
-            executablePath: '/usr/bin/chromium'
+            executablePath: EXECUTABLE_PATH
           });
           break;
         } catch (e) {
@@ -301,13 +301,14 @@ fastify.get('/*', async (request, reply) => {
   setTimeout(async () => {
     debugLog('Closing page for url on timeout: ', url);
     await closePageAndBrowser(page);
-  }, page_timeout_ms + 10000);
+  }, page_timeout_ms * 2 + 10000);
 
   try {
     // Monitor for page crashes
     page.on('error', err => {
       errorLog('Page error:', err);
-      throw err;
+      // We need not to throw error here, because we want to continue the request
+      // throw err;
     });
 
     await page.setUserAgent(userAgent);
@@ -317,15 +318,25 @@ fastify.get('/*', async (request, reply) => {
 
     await page.setRequestInterception(true);
 
+    // instead of aborting the main navigation request, we will respond gracefully
+    // this will help in avoiding the Navigation Errors
+    const respondGracefully = function (request) {
+      request.respond({
+        status: 200,
+        body: 'Hello, world!'
+      });
+    }
+
     page.on('request', childRequest => {
       const resourceType = childRequest.resourceType();
       // if we already have a redirect response, abort all the request
       if (isRedirected) {
-        childRequest.abort();
+        respondGracefully(childRequest);
       } else if (childRequest.isNavigationRequest() && childRequest.redirectChain().length > 0) {
         debugLog(`Redirect detected: ${childRequest.url()}, aborting...`);
         isRedirected = true;
-        childRequest.abort();
+        respondGracefully(childRequest);
+
       } else if (BLOCKED_RESOURCES.has(resourceType)) {
         childRequest.abort();
       } else if (resourceType === 'script' && isMatchesAny(childRequest.url(), JS_BLOCK_LIST)) {
@@ -374,10 +385,8 @@ fastify.get('/*', async (request, reply) => {
     if (isRedirected && redirectResponse) {
       debugLog('Returning initial response for redirect');
       // For redirects, send response without HTML
-      if (redirectResponse) {
-        await prepareHeader(reply, redirectResponse);
-        return reply.code(redirectResponse.status()).send();
-      }
+      await prepareHeader(reply, redirectResponse);
+      return reply.code(redirectResponse.status()).send();
     }
 
     if (page.isClosed()) {
@@ -387,7 +396,7 @@ fastify.get('/*', async (request, reply) => {
     if (error) {
       // handle timeout error
       if (error.name === 'TimeoutError') {
-        const html = await page.content();
+        const html = await page.content().catch(() => null);
 
         // have some content
         if (html && html.length > 0) {
@@ -401,8 +410,18 @@ fastify.get('/*', async (request, reply) => {
         }
       }
 
+      if (error && error.message.includes('frame was detached')) {
+        // Try to get content even if frame was detached
+        const html = await page.content().catch(() => null);
+        if (html && html.length > 0) {
+          debugLog('Frame was detached but content retrieved');
+          reply.header('Content-Type', 'text/html; charset=utf-8');
+          reply.header('X-Frame-Warning', 'Frame was detached but content was retrieved');
+          return reply.code(200).send(html);
+        }
+      }
+
       // other errors
-      errorLog(`Navigation error: ${error.message} for url: ${url}`);
       throw error;
     }
 
@@ -417,7 +436,7 @@ fastify.get('/*', async (request, reply) => {
     return reply.code(response.status()).send(html);
 
   } catch (error) {
-    errorLog(error);
+    errorLog(error, url);
     return reply.code(503).send({
       error: `${error.name}: ${error.message}`
     });
@@ -465,7 +484,6 @@ fastify.listen({ port: 3000, host: '0.0.0.0' }, async (err) => {
   if (err) {
     console.error(err);
     fastify.log.error(err);
-
     process.exit(1);
   }
   console.log('Server running on port 3000');

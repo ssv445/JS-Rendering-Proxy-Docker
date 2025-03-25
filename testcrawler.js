@@ -190,7 +190,7 @@ const crawlWebsite = async (startUrl, concurrency = MAX_CONCURRENT_REQUESTS) => 
 
 // Example usage
 const startCrawl = async (website) => {
-    const { results, stats } = await crawlWebsite(website, 10);
+    const { results, stats } = await crawlWebsite(website, 4);
 
     console.log('\nCrawl Stats:');
     console.log('============');
@@ -208,7 +208,7 @@ const startCrawl = async (website) => {
         });
     console.log(`\nErrors: ${stats.errors}`);
 
-    console.log('\nDetailed Results:', JSON.stringify(results, null, 2));
+    // console.log('\nDetailed Results:', JSON.stringify(results, null, 2));
 };
 
 startCrawl('https://blog.linkody.com').catch(console.error);

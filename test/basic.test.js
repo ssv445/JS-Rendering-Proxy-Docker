@@ -101,7 +101,6 @@ describe('Basic Tests', () => {
                 'x-wait-until-condition': 'domcontentloaded',
                 'x-block-js': 'super-blocked.js',
                 'x-page-timeout-ms': '90000',
-                'x-need-fresh-instance': 'true'
             }
         });
         expect(response.status).toBe(200);
