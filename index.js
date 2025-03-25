@@ -88,7 +88,8 @@ async function getBrowser() {
             headless: 'new',
             args: CORE_FLAGS,
             ignoreHTTPSErrors: true,
-            pipe: true,
+            pipe: false,
+            executablePath: '/usr/bin/chromium'
           });
           break;
         } catch (e) {
@@ -367,6 +368,9 @@ fastify.get('/*', async (request, reply) => {
       error = err;
     }
 
+    // Add a small delay to ensure the page is stable
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     if (isRedirected && redirectResponse) {
       debugLog('Returning initial response for redirect');
       // For redirects, send response without HTML
@@ -413,7 +417,6 @@ fastify.get('/*', async (request, reply) => {
     return reply.code(response.status()).send(html);
 
   } catch (error) {
-    errorLog(`Error processing request: ${error.name}`);
     errorLog(error);
     return reply.code(503).send({
       error: `${error.name}: ${error.message}`
@@ -428,7 +431,7 @@ async function closePageAndBrowser(page, browser) {
 
   try {
     if (page && !page.isClosed()) {
-      await page.removeAllListeners().catch(() => { });
+      await page.removeAllListeners();
       await page.close().catch(() => { });
     }
   } catch (error) {
@@ -451,7 +454,14 @@ cleanupChromeProcesses();
 
 
 
-fastify.listen({ port: 3000, host: '0.0.0.0' }, (err) => {
+fastify.listen({ port: 3000, host: '0.0.0.0' }, async (err) => {
+  try {
+    const browser = await getBrowser();
+  } catch (e) {
+    console.error(e);
+    process.exit(1);
+  }
+
   if (err) {
     console.error(err);
     fastify.log.error(err);
@@ -576,6 +586,7 @@ fastify.addHook('onResponse', (request, reply) => {
       url: request.query.render_url,
       time: Date.now(),
       start_time: startTime,
+      active_requests: activeRequests,
     };
 
     if (reply.raw._error?.message) {
