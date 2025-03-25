@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const TEST_TIMEOUT = 30000;
+const TEST_TIMEOUT = 15000;
 const websites = [
     'https://www.dementia.org.au/',
     'https://www.ssv445.com',
@@ -264,25 +264,22 @@ const axiosInstance = axios.create({
 const TEMPORARY_HTTP_STATUS_CODES = [408, 429, 502, 503, 504];
 
 const testWebsite = async (website) => {
-    let retryCount = 0;
+    let response;
+    let startTime;
     try {
-        let response;
-        let startTime;
-        do {
-            startTime = Date.now();
-            response = await axiosInstance.get('http://localhost:3000/?render_url=' + website);
-            if (TEMPORARY_HTTP_STATUS_CODES.includes(response.status)) {
-                // console.log(`[${website}] Temporary HTTP status code, retrying...`);
-                retryCount++;
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        } while (TEMPORARY_HTTP_STATUS_CODES.includes(response.status) && retryCount < 3);
-        // console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}, Error: ${response.data?.error || ''}`);
-        expect(response.status).toBe(200);
-        expect(response.data).toContain('<body');
+        startTime = Date.now();
+        response = await axiosInstance.get('http://localhost:3000/?render_url=' + website);
+
+        if (response.status !== 200) {
+            console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}, Error: ${response.data?.error || ''}`);
+            expect(TEMPORARY_HTTP_STATUS_CODES.includes(response.status)).toBe(false);
+        } else {
+            expect(response.data).toContain('<body');
+        }
+
     } catch (error) {
-        console.log(`[Website ${website}] Error:`, error.message);
-        // throw error;
+        console.log(`[Website ${website}, Response: ${response?.status}] Error:`, error.message);
+        throw error;
     }
 }
 
