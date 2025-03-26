@@ -64,6 +64,9 @@ const CORE_FLAGS = [
   '--single-process',               // Reduces memory usage
   // '--disable-extensions',           // Reduces overhead
   // '--disable-background-networking', // Reduces background activity
+  '--ignore-certificate-errors',
+  '--ignore-certificate-errors-spki-list',
+  '--allow-insecure-localhost',
 ];
 
 let browserInstance = null;

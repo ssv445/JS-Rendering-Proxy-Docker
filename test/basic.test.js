@@ -144,4 +144,15 @@ describe('Basic Tests', () => {
         expect(response.data).toContain('Dietapplements Limited');
 
     }, TEST_TIMEOUT);
+
+    // must ignore SSL Certificate and Authority errors, and still render the page
+    test('ignore ssl certificate errors', async () => {
+        const response = await axiosProxyInstance.get('https://chekkee.com', {
+            headers: {
+                'x-page-timeout-ms': '10000'
+            }
+        });
+        expect(response.status).toBe(200);
+        expect(response.data).toContain('<body');
+    }, TEST_TIMEOUT);
 }); 
