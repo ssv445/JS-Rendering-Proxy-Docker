@@ -28,6 +28,12 @@ A containerized web scraping Proxy API built with Node.js, Fastify, and Puppetee
 - Includes all required Chromium dependencies
 - Configurable through environment variables
 - Development container support for VS Code
+- Blocks CSS, media and configurable JS resources
+- Request rate limiting and concurrent request control
+- Detailed request logging
+- Process cleanup for zombie/orphaned Chrome processes
+- Graceful timeout and error handling
+- Configurable redirect behavior
 
 ## Prerequisites
 
@@ -55,8 +61,11 @@ docker run -p 3000:3000 puppeteer-scraper
 ## Environment Variables
 
 - `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD`: Set to `true` (uses system Chromium)
-- `PUPPETEER_EXECUTABLE_PATH`: Set to `/usr/bin/chromium`
-- `API_KEY`: Set your secret API key for authentication (required)
+- `EXECUTABLE_PATH`: Path to Chromium executable (default: `/usr/bin/chromium`)
+- `API_KEY`: Set your secret API key for authentication (optional)
+- `DEBUG`: Enable debug logging (optional)
+- `SERVER_NAME`: Server identifier for logs (optional)
+- `MAX_CONCURRENT_REQUESTS`: Maximum concurrent requests allowed (default: 10)
 
 ## Development
 
@@ -109,8 +118,9 @@ The following custom headers can be used to control the page rendering behavior:
 | `user-agent`             | User agent string to use for the browser                                                                    | `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36` |
 | `x-page-timeout-ms`      | Maximum time to wait for page load in milliseconds                                                          | 60000                                                                                                                       |
 | `x-wait-until-condition` | When to consider navigation successful. Options: `load`, `domcontentloaded`, `networkidle0`, `networkidle2` | `networkidle2`                                                                                                              |
-| `x-need-fresh-instance`  | Force creation of a new browser instance                                                                    | `false`                                                                                                                     |
-| `x-block-js`             | Blocks given JS file names (comma seperated), using file names.                                             |
+| `x-block-js`             | Blocks given JS file names (comma separated), using file names                                              | []                                                                                                                          |
+| `x-follow-redirects`     | Whether to follow redirects                                                                                 | false                                                                                                                       |
+| `x-api-key`              | API key for authentication (required if API_KEY env var is set)                                             | null                                                                                                                        |
 
 ### CURL Support
 

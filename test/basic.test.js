@@ -132,4 +132,16 @@ describe('Basic Tests', () => {
         expect(fourTwentyNineResponses.length).toBeGreaterThan(0);
         expect(fourTwentyNineResponses.length).toBeLessThan(responses.length);
     }, TEST_TIMEOUT);
+
+    //https://www.dietapplements.com/
+    test('slow website', async () => {
+        const response = await axiosProxyInstance.get('https://www.dietapplements.com/', {
+            headers: {
+                'x-page-timeout-ms': '10000'
+            }
+        });
+        expect(response.status).toBe(200);
+        expect(response.data).toContain('Dietapplements Limited');
+
+    }, TEST_TIMEOUT);
 }); 

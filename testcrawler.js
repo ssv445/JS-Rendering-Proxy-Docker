@@ -16,26 +16,25 @@ const axiosProxyInstance = axios.create({
     },
     // Still don't throw on non-200
     validateStatus: () => true,
-    maxRedirects: 0,
-    timeout: 10000,
+    timeout: 30000,
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
     headers: {
         'x-api-key': '1234567890',
-        'x-page-timeout-ms': '10000'
+        'x-page-timeout-ms': '10000',
+        // 'x-follow-redirects': 'true'
     }
 });
 
 const axiosInstance = axios.create({
     validateStatus: () => true,
-    maxRedirects: 0,
-    maxRedirects: 0,
-    timeout: 31000,
+    timeout: 30000,
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
     headers: {
         'x-api-key': '1234567890',
-        'x-page-timeout-ms': '10000'
+        'x-page-timeout-ms': '10000',
+        // 'x-follow-redirects': 'true'
     }
 });
 
@@ -52,9 +51,9 @@ const normalizeUrl = (url) => {
         // Always use https if available
         parsed.protocol = 'https:';
         // Remove www if present
-        if (parsed.hostname.startsWith('www.')) {
-            parsed.hostname = parsed.hostname.slice(4);
-        }
+        // if (parsed.hostname.startsWith('www.')) {
+        //     parsed.hostname = parsed.hostname.slice(4);
+        // }
         return parsed.toString();
     } catch (e) {
         return url;
@@ -82,8 +81,8 @@ const crawlWebsite = async (startUrl, concurrency = MAX_CONCURRENT_REQUESTS) => 
     const isValidUrl = (url) => {
         try {
             const parsedUrl = new URL(url);
-            const startUrlDomain = new URL(startUrl).hostname.replace(/^www\./, '');
-            return parsedUrl.hostname.replace(/^www\./, '') === startUrlDomain;
+            const startUrlDomain = new URL(startUrl).hostname;
+            return parsedUrl.hostname === startUrlDomain;
         } catch (e) {
             return false;
         }
@@ -120,7 +119,7 @@ const crawlWebsite = async (startUrl, concurrency = MAX_CONCURRENT_REQUESTS) => 
         const urlStartTime = Date.now();
         try {
             console.log(`Crawling: ${normalizedUrl}`);
-            const response = await axiosInstance.get('http://localhost:3000/?render_url=' + encodeURIComponent(normalizedUrl));
+            const response = await axiosInstance.get('http://localhost:3000/?render_url=' + normalizedUrl);
 
             // Track response time
             const responseTime = Date.now() - urlStartTime;
@@ -190,7 +189,7 @@ const crawlWebsite = async (startUrl, concurrency = MAX_CONCURRENT_REQUESTS) => 
 
 // Example usage
 const startCrawl = async (website) => {
-    const { results, stats } = await crawlWebsite(website, 4);
+    const { results, stats } = await crawlWebsite(website, 5);
 
     console.log('\nCrawl Stats:');
     console.log('============');
@@ -210,5 +209,5 @@ const startCrawl = async (website) => {
 
     // console.log('\nDetailed Results:', JSON.stringify(results, null, 2));
 };
-
+//https://www.dietapplements.com/
 startCrawl('https://blog.linkody.com').catch(console.error);

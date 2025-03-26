@@ -280,6 +280,7 @@ fastify.get('/*', async (request, reply) => {
   const page_timeout_ms = parseInt(request.headers['x-page-timeout-ms']) || DEFAULT_PAGE_TIMEOUT_MS;
   const wait_until_condition = [request.headers['x-wait-until-condition'] || DEFAULT_WAIT_UNTIL_CONDITION];
   const toBlockJS = request.headers['x-block-js'] || '';
+  const followRedirects = request.headers['x-follow-redirects'] || false;
 
   const toBlockJSArray = toBlockJS.split(',');
   // merge with default blocked JS
@@ -330,9 +331,9 @@ fastify.get('/*', async (request, reply) => {
     page.on('request', childRequest => {
       const resourceType = childRequest.resourceType();
       // if we already have a redirect response, abort all the request
-      if (isRedirected) {
+      if (!followRedirects && isRedirected) {
         respondGracefully(childRequest);
-      } else if (childRequest.isNavigationRequest() && childRequest.redirectChain().length > 0) {
+      } else if (!followRedirects && childRequest.isNavigationRequest() && childRequest.redirectChain().length > 0) {
         debugLog(`Redirect detected: ${childRequest.url()}, aborting...`);
         isRedirected = true;
         respondGracefully(childRequest);
@@ -382,7 +383,7 @@ fastify.get('/*', async (request, reply) => {
     // Add a small delay to ensure the page is stable
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    if (isRedirected && redirectResponse) {
+    if (!followRedirects && isRedirected && redirectResponse) {
       debugLog('Returning initial response for redirect');
       // For redirects, send response without HTML
       await prepareHeader(reply, redirectResponse);
@@ -588,13 +589,14 @@ fastify.addHook('onRequest', (request, reply, done) => {
 // read from env
 
 fastify.addHook('onResponse', (request, reply) => {
-
-  activeRequests--;
-
-  const startTime = requestTimes.get(request.id);
-  const [seconds, nanoseconds] = process.hrtime(startTime);
-  const timeTaken = (seconds * 1000 + nanoseconds / 1e6).toFixed(2); // Convert to ms
-  requestTimes.delete(request.id);
+  let timeTaken = '(unknown)';
+  if (requestTimes.has(request.id)) {
+    activeRequests = Math.max(0, activeRequests - 1);
+    const startTime = requestTimes.get(request.id);
+    requestTimes.delete(request.id);
+    const [seconds, nanoseconds] = process.hrtime(startTime);
+    timeTaken = (seconds * 1000 + nanoseconds / 1e6).toFixed(0); // Convert to ms
+  }
 
   if (request.query.render_url) {
     const logData = {
@@ -602,8 +604,6 @@ fastify.addHook('onResponse', (request, reply) => {
       status: reply.statusCode,
       time: `${timeTaken}ms`,
       url: request.query.render_url,
-      time: Date.now(),
-      start_time: startTime,
       active_requests: activeRequests,
     };
 
@@ -615,3 +615,64 @@ fastify.addHook('onResponse', (request, reply) => {
     console.log(LOG_STRING);
   }
 });
+
+fastify.addHook('onRequestAbort', (request) => {
+  if (requestTimes.delete(request.id)) {
+    activeRequests = Math.max(0, activeRequests - 1);
+
+    if (request.query.render_url) {
+
+      const logData = {
+        RENDER_LOGS: SERVER_NAME,
+        status: 'aborted by client',
+        url: request.query.render_url,
+        active_requests: activeRequests,
+      };
+
+      const LOG_STRING = JSON.stringify(logData);
+      console.log(LOG_STRING);
+    }
+  }
+});
+
+fastify.addHook('onTimeout', (request, reply) => {
+  if (requestTimes.delete(request.id)) {
+    activeRequests = Math.max(0, activeRequests - 1);
+    if (request.query.render_url) {
+
+      const logData = {
+        RENDER_LOGS: SERVER_NAME,
+        status: 'timeout in rendering',
+        url: request.query.render_url,
+        active_requests: activeRequests,
+      };
+
+      const LOG_STRING = JSON.stringify(logData);
+      console.log(LOG_STRING);
+    }
+  }
+});
+
+fastify.addHook('onError', (request, reply, error) => {
+  if (requestTimes.delete(request.id)) {
+    activeRequests = Math.max(0, activeRequests - 1);
+    if (request.query.render_url) {
+
+      const logData = {
+        RENDER_LOGS: SERVER_NAME,
+        status: 'error in rendering',
+        url: request.query.render_url,
+        active_requests: activeRequests,
+      }
+
+      const LOG_STRING = JSON.stringify(logData);
+      console.log(LOG_STRING);
+    }
+  }
+});
+
+if (process.env.DEBUG) {
+  setInterval(function () {
+    console.log('Active requests:', activeRequests);
+  }, 1000);
+}
