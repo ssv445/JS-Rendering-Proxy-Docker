@@ -149,11 +149,29 @@ fastify.get('/fast-page-slow-resource', async (request, reply) => {
     .send(`
     <html>
       <head>
-        <script src="http://localhost:3001/super-slow.js" onload="document.body.innerHTML = 'super-slow.js'"></script>
-        <link rel="stylesheet" href="http://localhost:3001/super-slow.css">
       </head>
       <body>
       ORIGINAL BODY: fast-page-slow-resource
+      <script src='http://localhost:3001/super-slow.js?seconds=2' onload="document.body.innerHTML = 'super-slow.js'"></script>
+      <script src='http://localhost:3001/super-slow.js?seconds=2' onload="document.body.innerHTML = 'super-slow.js'"></script>
+      </body>
+    </html>
+  `);
+});
+
+fastify.get('/fast-page-slow-resource-headscripts', async (request, reply) => {
+  console.log('in fast-page-slow-resource-headscripts');
+  return reply
+    .code(200)
+    .header('Content-Type', 'text/html')
+    .send(`
+    <html>
+      <head>
+        <script src='http://localhost:3001/super-slow.js?seconds=2' onload="document.body.innerHTML = 'super-slow.js'"></script>
+      <script src='http://localhost:3001/super-slow.js?seconds=2' onload="document.body.innerHTML = 'super-slow.js'"></script>
+      </head>
+      <body>
+      ORIGINAL BODY: fast-page-slow-resource-headscripts
       </body>
     </html>
   `);
@@ -184,10 +202,10 @@ fastify.get('/heavy-cpu', async (request, reply) => {
           }
           createHeavyCpu();
         </script>
-        <script src="http://localhost:3001/super-slow.js" onload="document.body.innerHTML = 'super-slow.js'"></script>
       </head>
       <body>
         HEAVY CPU PAGE
+        <script src="http://localhost:3001/super-slow.js" onload="document.body.innerHTML = 'super-slow.js'"></script>
       </body>
     </html>
   `);

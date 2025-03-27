@@ -25,6 +25,9 @@ const axiosInstance = axios.create({
     timeout: TEST_TIMEOUT - 2000,
 });
 
+// Run specific test
+// npm run test  -- --testNamePattern="page timeout"
+
 describe('Basic Tests', () => {
     beforeAll(async () => {
         // Check if servers are running
@@ -119,6 +122,19 @@ describe('Basic Tests', () => {
         expect(response.status).toBe(200);
         expect(response.data).toContain('fast-page-slow-resource');
     }, TEST_TIMEOUT);
+
+    // a testcase which check if page timesout still get the partial content
+    test('page timeout headscripts', async () => {
+        const response = await axiosProxyInstance.get('http://localhost:3001/fast-page-slow-resource-headscripts', {
+            headers: {
+                'x-page-timeout-ms': '1000'
+            }
+        });
+        expect(response.status).toBe(503);
+        // response body should not contain <body
+        expect(response.data).not.toContain('<body');
+    }, TEST_TIMEOUT);
+
 
     //test when more than 10 requests are made at the same time, then server should send 429
     test('multiple requests', async () => {

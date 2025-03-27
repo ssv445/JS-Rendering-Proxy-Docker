@@ -7,7 +7,7 @@
     "start": "node index.js",
     "test:server": "DEBUG=true node --watch test/mockServer.js",
     "test": "jest --config=test/jest.config.js",
-    "test:load": "tap test/loadtesting.js --timeout=300"
+    "test:load": "jest --config=test/load.config.js"
   },
   "dependencies": {
     "@fastify/compress": "^8.0.1",
