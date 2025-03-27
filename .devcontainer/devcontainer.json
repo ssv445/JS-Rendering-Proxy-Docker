@@ -31,7 +31,8 @@
         "donjayamanne.githistory",
         "arturock.gitstash",
         "formulahendry.auto-rename-tag",
-        "whtouche.vscode-js-console-utils"
+        "whtouche.vscode-js-console-utils",
+        "openai.chatgpt"
       ]
     }
   },
