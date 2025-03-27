@@ -129,8 +129,9 @@ fastify.get('/super-blocked.js', async (request, reply) => {
 });
 
 fastify.get('/super-slow.css', async (request, reply) => {
+  const seconds = parseInt(request.query.seconds) || 10;
   console.log('in super-slow.css');
-  await new Promise(resolve => setTimeout(resolve, 10000));
+  await new Promise(resolve => setTimeout(resolve, seconds * 1000));
   const css = `
     body {
       background-color: red;
@@ -156,6 +157,69 @@ fastify.get('/fast-page-slow-resource', async (request, reply) => {
       </body>
     </html>
   `);
+});
+
+//create a webpage, which uses JS to create heavy CPU load for 10 seconds
+//also include a super slow resource
+fastify.get('/heavy-cpu', async (request, reply) => {
+  const seconds = parseInt(request.query.seconds) || 10;
+  return reply
+    .code(200)
+    .header('Content-Type', 'text/html')
+    .send(`
+    <html>
+      <head>
+        <script>
+          function createHeavyCpu() {
+            const startTime = Date.now();
+            let i = 0;
+            while (Date.now() - startTime < ${seconds * 1000}) {
+              i++;
+                Math.pow(i, 2)
+  Math.sqrt(i)
+  Math.sin(i)
+  i++;
+              //do nothing
+            }
+          }
+          createHeavyCpu();
+        </script>
+        <script src="http://localhost:3001/super-slow.js" onload="document.body.innerHTML = 'super-slow.js'"></script>
+      </head>
+      <body>
+        HEAVY CPU PAGE
+      </body>
+    </html>
+  `);
+});
+
+// webpage which uses JS to create heavy memory load of 100MB
+fastify.get('/heavy-memory', async (request, reply) => {
+  const memoryInMB = parseInt(request.query.memoryInMB) || 100;
+  const parentArraySize = 1024 * 1024;//1MB
+  const childArraySize = Math.floor(memoryInMB);
+  return reply
+    .code(200)
+    .header('Content-Type', 'text/html')
+    .send(`
+      <html>
+        <head>
+          <script>
+            function createHeavyMemory() {
+              const array = new Array(${parentArraySize});
+              for (let i = 0; i < array.length; i++) {
+                array[i] = new Array(${childArraySize});  
+              }
+            }
+            createHeavyMemory();
+          </script>
+          <script src="http://localhost:3001/super-slow.js" onload="document.body.innerHTML = 'super-slow.js'"></script>
+        </head>
+        <body>
+          HEAVY MEMORY PAGE
+        </body>
+      </html>
+    `);
 });
 
 fastify.listen({ port: 3001 }, (err) => {
