@@ -35,18 +35,18 @@
       ]
     }
   },
-  // Use 'forwardPorts' to make a list of ports inside the container available locally.
-  "forwardPorts": [
-    3000
-  ],
-  // Use 'portsAttributes' to set default properties for specific forwarded ports.
-  // More info: https://containers.dev/implementors/json_reference/#port-attributes
-  "portsAttributes": {
-    "3000": {
-      "label": "JS-Rendering-Proxy-Docker",
-      "onAutoForward": "notify"
-    }
-  },
+  // // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  // "forwardPorts": [
+  //   3000
+  // ],
+  // // Use 'portsAttributes' to set default properties for specific forwarded ports.
+  // // More info: https://containers.dev/implementors/json_reference/#port-attributes
+  // "portsAttributes": {
+  //   "3000": {
+  //     "label": "JS-Rendering-Proxy-Docker",
+  //     "onAutoForward": "notify"
+  //   }
+  // },
   //https://www.kenmuse.com/blog/avoiding-dubious-ownership-in-dev-containers/
   "postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
   // Use 'postCreateCommand' to run commands after the container is created.

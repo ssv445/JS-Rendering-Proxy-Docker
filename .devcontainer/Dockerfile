@@ -28,4 +28,4 @@ RUN apt-get update &&  apt-get install -y chromium
 # ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Expose port
-EXPOSE 3000
+# EXPOSE 3000
