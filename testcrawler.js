@@ -34,7 +34,7 @@ const axiosInstance = axios.create({
     headers: {
         'x-api-key': '1234567890',
         'x-page-timeout-ms': '10000',
-        // 'x-follow-redirects': 'true'
+        'x-follow-redirects': 'true'
     }
 });
 
@@ -210,4 +210,4 @@ const startCrawl = async (website) => {
     // console.log('\nDetailed Results:', JSON.stringify(results, null, 2));
 };
 //https://www.dietapplements.com/
-startCrawl('https://blog.linkody.com').catch(console.error);
+startCrawl('https://www.lenovo.com/us/en/glossary').catch(console.error);

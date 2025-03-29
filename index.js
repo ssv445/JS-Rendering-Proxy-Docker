@@ -1,11 +1,8 @@
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-puppeteer.use(StealthPlugin());
-
+const { getCPUUsage, errorLog, debugLog, cleanupChromeProcesses, DEBUG, getMemoryUsage } = require('./helper');
 const { URL } = require('url');
-const { exec, execSync } = require('child_process');
+
 const fastify = require('fastify')({
-  logger: true,
+  logger: DEBUG,
   // Add compression support
   compression: {
     global: true,
@@ -14,45 +11,40 @@ const fastify = require('fastify')({
 });
 
 fastify.register(require('@fastify/compress'));
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
 
-// Resource types to block
-const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
-
-// Add blocked JS URLs - will match from end of URL
-const BLOCKED_JS = [
-];
-
-// Add debug flag
-const DEBUG = process.env.DEBUG === 'true';
 const API_KEY = process.env.API_KEY || null;
+const BROWSER_TIMEOUT = 5000;
 const EXECUTABLE_PATH = process.env.EXECUTABLE_PATH || '/usr/bin/chromium';
-
-
-// Add debug logging function
-function debugLog(...args) {
-  if (DEBUG) {
-    console.log('[DEBUG]', ...args);
-  }
-}
-
-function errorLog(...args) {
-  console.log('[ERROR]', ...args);
-  console.error(args);
-}
-
-// Browser management
 const DEFAULT_PAGE_TIMEOUT_MS = 60000;
 const DEFAULT_WAIT_UNTIL_CONDITION = 'networkidle2';
-const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
+// Resource types to block
+const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
+// Add blocked JS URLs - will match from end of URL
+const BLOCKED_JS = [];
+const SERVER_NAME = process.env.SERVER_NAME || 'proxy-server';
+const MAX_CONCURRENT_REQUESTS = process.env.MAX_CONCURRENT_REQUESTS || 20; // Adjust as needed
+const MAX_CPU_UTILIZATION_LIMIT = process.env.MAX_CPU_UTILIZATION_LIMIT || 95;
+const CLEANUP_CHROME_PROCESS_INTERVAL = process.env.CLEANUP_CHROME_PROCESS_INTERVAL || 30000;
 
+function isUnderPressure() {
+  const { cpuUsage, cpuCount, isError } = getCPUUsage();
+  if (isError) {
+    return false;
+  }
+  return (cpuUsage / cpuCount) > MAX_CPU_UTILIZATION_LIMIT;
+}
 
-const BROWSER_TIMEOUT = 5000;
 // Essential flags
 const CORE_FLAGS = [
   '--no-sandbox',                    // Required for running in Docker/CI
   '--disable-setuid-sandbox',        // Required with no-sandbox
   '--disable-web-security',          // Bypass CORS and other security (use with caution)
   '--disable-blink-features=AutomationControlled',  // Critical for bot detection bypass
+  '--disable-features=IsolateOrigins',
   '--window-size=1920,1080',        // Makes browser look more realistic
 
   // Performance flags
@@ -67,6 +59,7 @@ const CORE_FLAGS = [
   '--ignore-certificate-errors',
   '--ignore-certificate-errors-spki-list',
   '--allow-insecure-localhost',
+  '--disable-http2',
 ];
 
 let browserInstance = null;
@@ -92,7 +85,8 @@ async function getBrowser() {
             args: CORE_FLAGS,
             ignoreHTTPSErrors: true,
             pipe: false,
-            executablePath: EXECUTABLE_PATH
+            executablePath: EXECUTABLE_PATH,
+            timeout: BROWSER_TIMEOUT
           });
           break;
         } catch (e) {
@@ -236,6 +230,35 @@ const isMatchesAny = function (url, list) {
   return list.filter(Boolean).some(item => url.endsWith(item));
 }
 
+/**
+ * Get page content safely
+ * This function stops all JavaScript execution and returns the page content
+ * It also handles the case where the page is not loaded yet
+ */
+const getPageContentSafely = async (page) => {
+  try {
+    // Stop all JavaScript execution
+    await page.setJavaScriptEnabled(false);
+
+    //wait for 50 ms
+    await new Promise(resolve => setTimeout(resolve, 50));
+    // Get content with short timeout
+    const content = await Promise.race([
+      page.content(),
+      new Promise((_, reject) => setTimeout(() => reject('Content fetch timeout'), 500))
+    ]);
+
+    // if content is not null and contains <body, return content
+    if (content && content.includes('<body')) {
+      return content;
+    }
+
+    return null;
+  } catch (e) {
+    return null;
+  }
+};
+
 fastify.get('/*', async (request, reply) => {
   const targetUrl = `${request.url}`;
   let url = targetUrl;
@@ -302,10 +325,11 @@ fastify.get('/*', async (request, reply) => {
     return reply.code(503).send({ error: 'Failed to create page, please try again later' });
   }
 
-  setTimeout(async () => {
-    debugLog('Closing page for url on timeout: ', url);
-    await closePageAndBrowser(page);
-  }, page_timeout_ms * 2 + 10000);
+  // This is to actually close the page after sufficient time
+  // setTimeout(async () => {
+  //   debugLog('Closing page for url on timeout: ', url);
+  //   await closePageAndBrowser(page);
+  // }, page_timeout_ms * 10);
 
   try {
     // Monitor for page crashes
@@ -315,7 +339,19 @@ fastify.get('/*', async (request, reply) => {
       // throw err;
     });
 
-    await page.setUserAgent(userAgent);
+    // await page.setUserAgent(userAgent);
+    //set Accept-Language
+    await page.setExtraHTTPHeaders({
+      'Accept': '*/*',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive'
+    });
+
+    // Add these before making requests
+    await page.setViewport({
+      width: 1920,
+      height: 1080
+    });
 
     let redirectResponse = null;
     let isRedirected = false;
@@ -366,25 +402,34 @@ fastify.get('/*', async (request, reply) => {
       }
     });
 
-    // Set request headers
-    // debugLog(`Request headers: ${JSON.stringify(request.headers)}`);
-    // // Generates ERROR
-    // await page.setExtraHTTPHeaders(request.headers);
-
     // Navigate with timeout
     let error = null;
     let response = null;
+    let pageContent = null;
     try {
-      [error, response] = await Promise.all([
-        page.waitForNavigation({ waitUntil: wait_until_condition, timeout: page_timeout_ms }).then(() => { }).catch(err => err),
-        page.goto(url)
+      response = await Promise.race([
+        page.goto(url, {
+          waitUntil: wait_until_condition,
+          timeout: page_timeout_ms
+        }),
+        new Promise((_, reject) =>
+          setTimeout(async () => {
+            const partialHtml = await getPageContentSafely(page);
+            reject({ name: 'TimeoutError', partialHtml });
+          }, page_timeout_ms)
+        )
       ]);
+
+      // if response is 200, then get the page content, else don't get the page content
+      if (response && response.status() === 200) {
+        pageContent = await getPageContentSafely(page);
+      }
+
     } catch (err) {
       error = err;
+      pageContent = error.partialHtml || await getPageContentSafely(page);
+      await closePageAndBrowser(page);
     }
-
-    // Add a small delay to ensure the page is stable
-    await new Promise(resolve => setTimeout(resolve, 100));
 
     if (!followRedirects && isRedirected && redirectResponse) {
       debugLog('Returning initial response for redirect');
@@ -393,62 +438,68 @@ fastify.get('/*', async (request, reply) => {
       return reply.code(redirectResponse.status()).send();
     }
 
-    if (page.isClosed()) {
-      throw new Error('Page is closed');
-    }
-
     if (error) {
-      // handle timeout error
-      if (error.name === 'TimeoutError') {
-        const html = await page.content().catch(() => null);
-
-        // have some content
-        if (html && html.length > 0) {
-          debugLog('Returning partial content for timeout');
-          reply.header('Content-Type', 'text/html; charset=utf-8');
-          reply.header('X-Timeout-Warning', 'Page load timed out but partial content was retrieved');
-          return reply.code(200).send(html);
-        } else {
-          errorLog(`Page load timed out for ${url} timeout: ${page_timeout_ms}, No content returned`);
-          return reply.code(504).send({ error: 'Gateway Timeout' });
-        }
+      // handle timeout error only
+      if (error.name === 'TimeoutError' && pageContent) {
+        debugLog('Returning partial content for timeout');
+        reply.header('Content-Type', 'text/html; charset=utf-8');
+        reply.header('X-Timeout-Warning', 'Page load timed out but partial content was retrieved');
+        return reply.code(200).send(pageContent);
       }
-
-      if (error && error.message.includes('frame was detached')) {
-        // Try to get content even if frame was detached
-        const html = await page.content().catch(() => null);
-        if (html && html.length > 0) {
-          debugLog('Frame was detached but content retrieved');
-          reply.header('Content-Type', 'text/html; charset=utf-8');
-          reply.header('X-Frame-Warning', 'Frame was detached but content was retrieved');
-          return reply.code(200).send(html);
-        }
-      }
-
       // other errors
       throw error;
     }
 
-    // For successful responses, include rendered HTML
     if (!response) {
-      throw new Error('No response received');
+      throw new Error('ERR_NO_RESPONSE');
     }
 
-    const html = await page.content();
+    // For successful responses, include rendered HTML
     await prepareHeader(reply, response);
     reply.header('Content-Type', 'text/html; charset=utf-8');
-    return reply.code(response.status()).send(html);
+    return reply.code(response.status()).send(pageContent);
 
   } catch (error) {
-    errorLog(error, url);
-    return reply.code(503).send({
-      error: `${error.name}: ${error.message}`
-    });
-
+    return handlePageError(error, reply, url);
   } finally {
     await closePageAndBrowser(page);
   }
 });
+
+async function handlePageError(error, reply, url, response) {
+  // Check the full error message since the error name might be just "Error"
+  const errorMessage = error.message || '';
+
+  if (error.name.includes('TimeoutError') || errorMessage.includes('timeout')) {
+    return reply.code(504).send({
+      error: 'Gateway Timeout'
+    });
+  }
+
+  if (errorMessage.includes('ERR_NO_RESPONSE')) {
+    return reply.code(502).send({
+      error: "No response received from the server"
+    });
+  }
+
+  if (errorMessage.includes('ERR_CONNECTION_CLOSED')) {
+    return reply.code(502).send({
+      error: 'Target server closed the connection unexpectedly',
+    });
+  }
+
+  if (errorMessage.includes('ERR_SSL_PROTOCOL_ERROR')) {
+    return reply.code(525).send({
+      error: 'The SSL connection could not be established with the server',
+    });
+  }
+
+  // Only log if none of the above conditions match
+  errorLog(error.name, error.message, url, response?.status);
+  return reply.code(503).send({
+    error: `${error.name}: ${error.message}`
+  });
+}
 
 async function closePageAndBrowser(page, browser) {
 
@@ -472,9 +523,6 @@ async function closePageAndBrowser(page, browser) {
     }
   }
 }
-// the first time it runs, it should clean up all the chrome processes
-cleanupChromeProcesses();
-
 
 
 fastify.listen({ port: 3000, host: '0.0.0.0' }, async (err) => {
@@ -493,73 +541,9 @@ fastify.listen({ port: 3000, host: '0.0.0.0' }, async (err) => {
   console.log('Server running on port 3000');
 });
 
-// Add these functions
-function getZombieProcesses() {
-  try {
-    // Find chrome processes that are zombies (defunct)
-    const cmd = "ps aux | grep chrome | grep defunct | awk '{print $2}'";
-    return execSync(cmd).toString().trim().split('\n').filter(Boolean);
-  } catch (error) {
-    debugLog('Error getting zombie processes:', error);
-    return [];
-  }
-}
-
-function getOrphanedChromeProcesses() {
-  try {
-    // Find chrome processes running longer than 5 minutes
-    const cmd = "ps -eo pid,etimes,cmd | grep chrom | grep -v grep | awk '$2 > 300 {print $1}'";
-    return execSync(cmd).toString().trim().split('\n').filter(Boolean);
-  } catch (error) {
-    debugLog('Error getting orphaned processes:', error);
-    return [];
-  }
-}
-
-async function cleanupChromeProcesses() {
-  try {
-    // Kill zombie processes
-    const zombies = getZombieProcesses();
-    if (zombies.length) {
-      debugLog(`Found ${zombies.length} zombie chrome processes`);
-      zombies.forEach(pid => {
-        try {
-          process.kill(parseInt(pid), 'SIGKILL');
-          debugLog(`Killed zombie process ${pid}`);
-        } catch (e) {
-          if (e.code !== 'ESRCH') {
-            debugLog(`Failed to kill zombie ${pid}:`, e);
-          }
-        }
-      });
-    }
-
-    // Kill orphaned processes
-    const orphaned = getOrphanedChromeProcesses();
-    if (orphaned.length) {
-      debugLog(`Found ${orphaned.length} orphaned chrome processes`);
-      orphaned.forEach(pid => {
-        try {
-          process.kill(parseInt(pid), 'SIGKILL');
-          debugLog(`Killed orphaned process ${pid}`);
-        } catch (e) {
-          debugLog(`Failed to kill orphaned ${pid}:`, e);
-        }
-      });
-    }
-
-    // // Cleanup any remaining headless chrome instances
-    // exec('pkill -f "(chrome)?(--headless)"', (err) => {
-    //   if (err && err.code !== 1) debugLog('Chrome cleanup error:', err);
-    // });
-  } catch (error) {
-    debugLog('Cleanup error:', error);
-  }
-}
 
 // Run cleanup every minute
-setInterval(cleanupChromeProcesses, 60000);
-
+setInterval(cleanupChromeProcesses, CLEANUP_CHROME_PROCESS_INTERVAL);
 // Also run cleanup on process exit
 process.on('SIGINT', async () => {
   await cleanupChromeProcesses();
@@ -574,16 +558,25 @@ process.on('SIGTERM', async () => {
 
 // Track request start times
 const requestTimes = new Map();
-const SERVER_NAME = process.env.SERVER_NAME || 'proxy-server';
-const MAX_CONCURRENT_REQUESTS = process.env.MAX_CONCURRENT_REQUESTS || 10; // Adjust as needed
+
 let activeRequests = 0;
 
 fastify.addHook('onRequest', (request, reply, done) => {
-  requestTimes.set(request.id, process.hrtime());
+  console.log('CPU Usage:', (getCPUUsage().cpuUsage / getCPUUsage().cpuCount).toFixed(2) + '%');
+  if (isUnderPressure()) {
+    return reply.status(503).send({
+      error: 'Service Unavailable',
+      message: 'Server is under high load, please try again later',
+      retryAfter: 30
+    });
+  }
+
   if (activeRequests >= MAX_CONCURRENT_REQUESTS) {
     reply.status(429).send({ error: 'Too many requests, try again later' });
     return;
   }
+
+  requestTimes.set(request.id, process.hrtime());
   activeRequests++;
 
   done();
@@ -591,32 +584,45 @@ fastify.addHook('onRequest', (request, reply, done) => {
 
 // read from env
 
-fastify.addHook('onResponse', (request, reply) => {
-  let timeTaken = '(unknown)';
-  if (requestTimes.has(request.id)) {
-    activeRequests = Math.max(0, activeRequests - 1);
-    const startTime = requestTimes.get(request.id);
-    requestTimes.delete(request.id);
-    const [seconds, nanoseconds] = process.hrtime(startTime);
-    timeTaken = (seconds * 1000 + nanoseconds / 1e6).toFixed(0); // Convert to ms
-  }
-
-  if (request.query.render_url) {
-    const logData = {
-      RENDER_LOGS: SERVER_NAME,
-      status: reply.statusCode,
-      time: `${timeTaken}ms`,
-      url: request.query.render_url,
-      active_requests: activeRequests,
-    };
-
-    if (reply.raw._error?.message) {
-      logData.error = reply.raw._error?.message;
+fastify.addHook('onSend', (request, reply, payload, done) => {
+  try {
+    let timeTaken = '(unknown)';
+    if (requestTimes.has(request.id)) {
+      activeRequests = Math.max(0, activeRequests - 1);
+      const startTime = requestTimes.get(request.id);
+      requestTimes.delete(request.id);
+      const [seconds, nanoseconds] = process.hrtime(startTime);
+      timeTaken = (seconds * 1000 + nanoseconds / 1e6).toFixed(0); // Convert to ms
     }
 
-    const LOG_STRING = JSON.stringify(logData);
-    console.log(LOG_STRING);
+    if (request.query.render_url) {
+      const logData = {
+        RENDER_LOGS: SERVER_NAME,
+        status: reply.statusCode,
+        time: `${timeTaken}ms`,
+        url: request.query.render_url,
+        active_requests: activeRequests,
+      };
+
+      // Get error from sent response
+      if (reply.statusCode >= 400) {
+        try {
+          const body = JSON.parse(payload);
+          logData.error = body.error;
+          logData.error_message = body.message;
+        } catch (e) {
+          // Handle if payload isn't JSON
+        }
+      }
+
+      const LOG_STRING = JSON.stringify(logData);
+      console.log(LOG_STRING);
+    }
+  } catch (e) {
+    //console.error(e);
   }
+
+  done();
 });
 
 fastify.addHook('onRequestAbort', (request) => {
@@ -627,7 +633,7 @@ fastify.addHook('onRequestAbort', (request) => {
 
       const logData = {
         RENDER_LOGS: SERVER_NAME,
-        status: 'aborted by client',
+        status: 'onRequestAbortHook',
         url: request.query.render_url,
         active_requests: activeRequests,
       };
@@ -645,7 +651,7 @@ fastify.addHook('onTimeout', (request, reply) => {
 
       const logData = {
         RENDER_LOGS: SERVER_NAME,
-        status: 'timeout in rendering',
+        status: 'onTimeoutHook',
         url: request.query.render_url,
         active_requests: activeRequests,
       };
@@ -663,9 +669,12 @@ fastify.addHook('onError', (request, reply, error) => {
 
       const logData = {
         RENDER_LOGS: SERVER_NAME,
-        status: 'error in rendering',
+        status: 'onErrorHook',
         url: request.query.render_url,
         active_requests: activeRequests,
+        error: error.name,
+        error_message: error.message,
+        error_stack: error.stack,
       }
 
       const LOG_STRING = JSON.stringify(logData);
@@ -673,9 +682,3 @@ fastify.addHook('onError', (request, reply, error) => {
     }
   }
 });
-
-if (process.env.DEBUG) {
-  setInterval(function () {
-    console.log('Active requests:', activeRequests);
-  }, 1000);
-}

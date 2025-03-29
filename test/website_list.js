@@ -46,7 +46,6 @@ const websites = [
     "https://briertonjones.com",
     "https://www.fulfyld.com",
     "https://1xbet-my-app.org",
-    "https://www.moonlink.site",
     "https://blog.linkody.com",
     "https://www.yeezyspk.ru",
     "https://ambulancemed.com",
@@ -261,22 +260,36 @@ const axiosInstance = axios.create({
     }
 });
 
-const TEMPORARY_HTTP_STATUS_CODES = [408, 429, 502, 503, 504];
+const PROBLEMATIC_HTTP_STATUS_CODES = [408, 429, 502, 503, 504, 403];
+const RETRY_AGAIN_HTTP_STATUS_CODES = [429, 503];
 
 const testWebsite = async (website) => {
     let response;
     let startTime;
+    let axiosResponse;
     try {
         startTime = Date.now();
-        response = await axiosInstance.get('http://localhost:3000/?render_url=' + website);
+        // fetch via rendere
+        [axiosResponse, response] = await Promise.all([
+            axios.get(website),
+            axiosInstance.get('http://localhost:3000/?render_url=' + website),
+        ]);
 
-        if (response.status !== 200) {
-            console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}, Error: ${response.data?.error || ''}`);
-            expect(TEMPORARY_HTTP_STATUS_CODES.includes(response.status)).toBe(false);
-        } else {
-            expect(response.data).toContain('<body');
+        //check if the response is the same for successful responses
+        if (axiosResponse.status === 200) {
+            expect(response.status).toBe(200);
         }
 
+        if (response.status === 200) {
+            if (!response.data.includes('<body')) {
+                expect('body tag not found').toBe(true);
+            }
+        } else {
+            console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}, Error: ${response.data?.error || ''}`);
+            if (PROBLEMATIC_HTTP_STATUS_CODES.includes(response.status)) {
+                expect(response.status).toBe(200);
+            }
+        }
     } catch (error) {
         console.log(`[Website ${website}, Response: ${response?.status}] Error:`, error.message);
         throw error;

@@ -29,17 +29,20 @@ describe('Load Tests', () => {
 
     //create a cpu load test for server, it should not crash
     test('cpu', async () => {
-        const pageTimeout = 15000;
-        const requestTimeout = pageTimeout * 3;
+        const pageTimeout = 30000;
+        const requestTimeout = pageTimeout * 6;
         //increase timeout of axiosInstance to 30 seconds
-        axiosInstance.defaults.timeout = requestTimeout;
+        axiosInstance.defaults.timeout = requestTimeout + 60000;
         let urls = [];
-        for (let i = 0; i < 10; i++) {
-            urls.push(`http://localhost:3000?render_url=http://localhost:3001/heavy-cpu?seconds=15&i=${i}`);
+        for (let i = 0; i < 40; i++) {
+            urls.push(`http://localhost:3000?render_url=http://localhost:3001/heavy-cpu?seconds=60&i=${i}`);
         }
 
-        const promises = urls.map(url =>
-            axiosInstance.get(url, {
+        const promises = urls.map(async (url, index) => {
+            //wait for random time between 1 and 20 seconds
+            await new Promise(resolve => setTimeout(resolve, index * 1.5 * 1000));
+            console.log(`Request ${url} started`);
+            return axiosInstance.get(url, {
                 headers: {
                     //css waits for 10secs
                     'x-page-timeout-ms': pageTimeout.toString(),
@@ -48,6 +51,7 @@ describe('Load Tests', () => {
                 // Return error object instead of throwing
                 return { status: err.code === 'ECONNABORTED' ? 'timeout' : 'error' };
             })
+        }
         );
 
         const responses = await Promise.all(promises);
