@@ -27,7 +27,7 @@ const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
 const BLOCKED_JS = [];
 const SERVER_NAME = process.env.SERVER_NAME || 'proxy-server';
 const MAX_CONCURRENT_REQUESTS = process.env.MAX_CONCURRENT_REQUESTS || 20; // Adjust as needed
-const MAX_CPU_UTILIZATION_LIMIT = process.env.MAX_CPU_UTILIZATION_LIMIT || 95;
+const MAX_CPU_UTILIZATION_LIMIT = process.env.MAX_CPU_UTILIZATION_LIMIT || 80;
 const CLEANUP_CHROME_PROCESS_INTERVAL = process.env.CLEANUP_CHROME_PROCESS_INTERVAL || 30000;
 
 function isUnderPressure() {
@@ -476,7 +476,13 @@ async function handlePageError(error, reply, url, response) {
     });
   }
 
-  if (errorMessage.includes('ERR_NO_RESPONSE')) {
+  if (errorMessage.includes('ERR_EMPTY_RESPONSE')) {
+    return reply.code(502).send({
+      error: "No response received from the server"
+    });
+  }
+
+  if (errorMessage.includes('ERR_NO_RESPONSE') || errorMessage.includes('ERR_ABORTED')) {
     return reply.code(502).send({
       error: "No response received from the server"
     });
@@ -496,7 +502,7 @@ async function handlePageError(error, reply, url, response) {
 
   // Only log if none of the above conditions match
   errorLog(error.name, error.message, url, response?.status);
-  return reply.code(503).send({
+  return reply.code(response?.status || 503).send({
     error: `${error.name}: ${error.message}`
   });
 }

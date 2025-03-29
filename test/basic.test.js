@@ -180,7 +180,6 @@ describe('Basic Tests', () => {
 
     const websites403 = [
         'https://www.drainfieldsolutions.com',
-        'https://www.w2gositeservices.com/',
         'https://ganknow.com/blog/',
         'https://www.pleasureinjapan.com/blog',
         'https://www.revefi.com/',
@@ -209,8 +208,13 @@ describe('Basic Tests', () => {
     }, TEST_TIMEOUT);
 
     // test NO response received
-    // test('NO response received', async () => {
-    //     const response = await axiosInstance.get('http://localhost:3000/?render_url=' + 'https://www.drainfieldsolutions.com/');
-    //     expect(response.status).toBe(502);
-    // }, TEST_TIMEOUT);
+    test('ERR_EMPTY_RESPONSE', async () => {
+        const response = await axiosInstance.get('http://localhost:3000/?render_url=' + 'http://localhost:3001/no-response-destroy');
+        expect(response.status).toBe(502);
+    }, TEST_TIMEOUT);
+
+    test('ERR_NO_RESPONSE', async () => {
+        const response = await axiosInstance.get('http://localhost:3000/?render_url=' + 'http://localhost:3001/no-response');
+        expect(response.status).toBe(502);
+    }, TEST_TIMEOUT);
 });

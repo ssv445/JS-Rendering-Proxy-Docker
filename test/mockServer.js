@@ -17,6 +17,16 @@ fastify.get('/success', async (request, reply) => {
     `);
 });
 
+// Method 3: Destroy connection
+fastify.get('/no-response-destroy', async (request, reply) => {
+  reply.raw.socket?.destroy();
+});
+
+fastify.get('/no-response', async (request, reply) => {
+  reply.code(204).send();
+  // Puppeteer's page.goto() might return null for 204 responses
+});
+
 fastify.get('/redirect', async (request, reply) => {
   return reply
     .code(302)
