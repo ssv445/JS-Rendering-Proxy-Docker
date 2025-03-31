@@ -260,7 +260,7 @@ const axiosInstance = axios.create({
     }
 });
 
-const PROBLEMATIC_HTTP_STATUS_CODES = [408, 429, 502, 503, 504, 403];
+const PROBLEMATIC_HTTP_STATUS_CODES = [408, 502, 504, 403];
 const RETRY_AGAIN_HTTP_STATUS_CODES = [429, 503];
 
 const testWebsite = async (website) => {
@@ -285,7 +285,7 @@ const testWebsite = async (website) => {
                 expect('body tag not found').toBe(true);
             }
         } else {
-            console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}, Error: ${response.data?.error || ''}`);
+            // console.log(`[${website}] Got response in ${Date.now() - startTime}ms, Status: ${response.status}, Content length: ${response.data?.length || 0}, Error: ${response.data?.error || ''}`);
             if (PROBLEMATIC_HTTP_STATUS_CODES.includes(response.status)) {
                 expect(response.status).toBe(200);
             }

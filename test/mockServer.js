@@ -20,11 +20,40 @@ fastify.get('/success', async (request, reply) => {
 // Method 3: Destroy connection
 fastify.get('/no-response-destroy', async (request, reply) => {
   reply.raw.socket?.destroy();
+  return;
 });
 
 fastify.get('/no-response', async (request, reply) => {
   reply.code(204).send();
   // Puppeteer's page.goto() might return null for 204 responses
+});
+
+//ERR_CONNECTION_CLOSED
+fastify.get('/no-response-connection-closed', async (request, reply) => {
+  // --- Introduce a small delay ---
+  // Wait for 100 milliseconds. This might be enough for the browser
+  // to fully establish the connection state before it's torn down.
+  await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+  // --- End of delay ---
+
+  try {
+    // Access the underlying Node.js socket object
+    const socket = reply.raw.socket;
+    // Start sending response
+    reply.raw.writeHead(200);
+    reply.raw.write('partial data');
+    if (socket && !socket.destroyed) {
+      // Destroy the socket after the delay
+      socket.destroy();
+      console.log('Socket destroyed successfully after delay.');
+    } else {
+      console.warn('Socket not found or already destroyed before delayed destruction attempt.');
+    }
+  } catch (error) {
+    console.error('Error while trying to destroy socket after delay:', error);
+  }
+
+  return;
 });
 
 fastify.get('/redirect', async (request, reply) => {

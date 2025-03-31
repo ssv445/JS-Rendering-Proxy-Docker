@@ -197,7 +197,7 @@ describe('Basic Tests', () => {
 
     //test ERR_CONNECTION_CLOSED
     test('ERR_CONNECTION_CLOSED', async () => {
-        const response = await axiosInstance.get('http://localhost:3000/?render_url=' + 'https://www.finosauras.com');
+        const response = await axiosInstance.get('http://localhost:3000/?render_url=' + 'http://localhost:3001/no-response-connection-closed');
         expect(response.status).toBe(502);
     }, TEST_TIMEOUT);
 
@@ -217,4 +217,36 @@ describe('Basic Tests', () => {
         const response = await axiosInstance.get('http://localhost:3000/?render_url=' + 'http://localhost:3001/no-response');
         expect(response.status).toBe(502);
     }, TEST_TIMEOUT);
+
+    const websites504 = [
+        'https://ambulancemed.com',
+        'https://www.barneyscafe.co.uk',
+        'https://www.instacabo.com/',
+        'https://www.squadcast.com/',
+        'https://www.revefi.com',
+    ];
+    //should not be 403 error
+    websites504.forEach(async (website) => {
+        test(`should not be 504 error ${website}`, async () => {
+            const axiosProxyResponse = await axiosInstance.get('http://localhost:3000/?render_url=' + website)
+            console.log(website, axiosProxyResponse.status);
+            expect(axiosProxyResponse.status).not.toBe(504);
+
+        }, TEST_TIMEOUT);
+    });
+
 });
+//net::ERR_NAME_NOT_RESOLVED
+//ERROR] Error net::ERR_NAME_NOT_RESOLVED at https://ohiopyle.co https://ohiopyle.co undefined
+// { "RENDER_LOGS": "proxy-server", "status": 503, "time": "8303ms", "url": "https://ohiopyle.co", "active_requests": 4, "error": "Error: net::ERR_NAME_NOT_RESOLVED at https://ohiopyle.co" }
+
+//{"RENDER_LOGS":"proxy-server","status":504,"time":"10096ms","url":"https://ambulancemed.com","active_requests":3,"error":"Gateway Timeout"}
+//{"RENDER_LOGS":"proxy-server","status":304,"time":"3861ms","url":"https://thepodcastpedia.com/","active_requests":3}
+// { "RENDER_LOGS": "proxy-server", "status": 504, "time": "11896ms", "url": "https://www.barneyscafe.co.uk", "active_requests": 2, "error": "Gateway Timeout" }
+// { "RENDER_LOGS": "proxy-server", "status": 504, "time": "11433ms", "url": "https://www.instacabo.com/", "active_requests": 1, "error": "Gateway Timeout" }
+
+//{"RENDER_LOGS":"proxy-server","status":504,"time":"11902ms","url":"https://www.squadcast.com/","active_requests":3,"error":"Gateway Timeout"}
+//{"RENDER_LOGS":"proxy-server","status":304,"time":"6064ms","url":"https://www.revefi.com","active_requests":3}
+// {"RENDER_LOGS":"proxy-server","status":502,"time":"1969ms","url":"https://briertonjones.com","active_requests":1,"error":"No response received from the server"}
+// { "RENDER_LOGS": "proxy-server", "status": 502, "time": "4906ms", "url": "https://briertonjones.com/", "active_requests": 1, "error": "No response received from the server" }
+//{"RENDER_LOGS":"proxy-server","status":503,"time":"1184ms","url":"https://www.justpark.com/","active_requests":0,"error":"Error: Navigating frame was detached"}

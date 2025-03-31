@@ -26,7 +26,7 @@ const BLOCKED_RESOURCES = new Set(['image', 'media', 'font']);
 // Add blocked JS URLs - will match from end of URL
 const BLOCKED_JS = [];
 const SERVER_NAME = process.env.SERVER_NAME || 'proxy-server';
-const MAX_CONCURRENT_REQUESTS = process.env.MAX_CONCURRENT_REQUESTS || 20; // Adjust as needed
+const MAX_CONCURRENT_REQUESTS = process.env.MAX_CONCURRENT_REQUESTS || 8; // Adjust as needed
 const MAX_CPU_UTILIZATION_LIMIT = process.env.MAX_CPU_UTILIZATION_LIMIT || 80;
 const CLEANUP_CHROME_PROCESS_INTERVAL = process.env.CLEANUP_CHROME_PROCESS_INTERVAL || 30000;
 
@@ -59,7 +59,7 @@ const CORE_FLAGS = [
   '--ignore-certificate-errors',
   '--ignore-certificate-errors-spki-list',
   '--allow-insecure-localhost',
-  '--disable-http2',
+  // '--disable-http2',
 ];
 
 let browserInstance = null;
