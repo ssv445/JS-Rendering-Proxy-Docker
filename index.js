@@ -30,6 +30,11 @@ const MAX_CONCURRENT_REQUESTS = process.env.MAX_CONCURRENT_REQUESTS || 8; // Adj
 const MAX_CPU_UTILIZATION_LIMIT = process.env.MAX_CPU_UTILIZATION_LIMIT || 80;
 const CLEANUP_CHROME_PROCESS_INTERVAL = process.env.CLEANUP_CHROME_PROCESS_INTERVAL || 30000;
 
+
+
+const CHROME_CACHE_SIZE = process.env.CHROME_CACHE_SIZE || (100 * 1024 * 1024).toString(); // 100MB default
+const CHROME_MEDIA_CACHE_SIZE = process.env.CHROME_MEDIA_CACHE_SIZE || (100 * 1024 * 1024).toString();
+
 function isUnderPressure() {
   const { cpuUsage, cpuCount, isError } = getCPUUsage();
   if (isError) {
@@ -60,6 +65,9 @@ const CORE_FLAGS = [
   '--ignore-certificate-errors-spki-list',
   '--allow-insecure-localhost',
   // '--disable-http2',
+  '--disk-cache-size=' + CHROME_CACHE_SIZE,
+  '--media-cache-size=' + CHROME_MEDIA_CACHE_SIZE,
+  '--aggressive-cache-discard',
 ];
 
 let browserInstance = null;
@@ -566,6 +574,7 @@ process.on('SIGTERM', async () => {
 const requestTimes = new Map();
 
 let activeRequests = 0;
+let totalRequests = 0;
 
 fastify.addHook('onRequest', (request, reply, done) => {
   console.log('CPU Usage:', (getCPUUsage().cpuUsage / getCPUUsage().cpuCount).toFixed(2) + '%');
@@ -584,7 +593,7 @@ fastify.addHook('onRequest', (request, reply, done) => {
 
   requestTimes.set(request.id, process.hrtime());
   activeRequests++;
-
+  totalRequests++;
   done();
 });
 
@@ -688,3 +697,5 @@ fastify.addHook('onError', (request, reply, error) => {
     }
   }
 });
+
+

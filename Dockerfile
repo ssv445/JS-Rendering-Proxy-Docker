@@ -22,6 +22,9 @@ RUN apt-get install -y lsb-release xdg-utils wget libgbm-dev wget gnupg
 # Install required dependencies for Puppeteer
 RUN apt-get update &&  apt-get install -y chromium 
 
+# clean up
+RUN apt-get clean
+
 # Set Puppeteer to use Chromium instead of Chrome
 # ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
