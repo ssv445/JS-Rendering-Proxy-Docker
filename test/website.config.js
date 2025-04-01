@@ -1,7 +1,7 @@
 const config = {
     testTimeout: 25000,
     testEnvironment: 'node',
-    maxWorkers: 2,
+    maxWorkers: 1,
     verbose: false,
     testMatch: ['**/website*.test.js'],
 }

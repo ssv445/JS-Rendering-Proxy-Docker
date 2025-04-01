@@ -347,12 +347,13 @@ fastify.get('/*', async (request, reply) => {
       // throw err;
     });
 
-    // await page.setUserAgent(userAgent);
-    //set Accept-Language
+    await page.setUserAgent(userAgent);
     await page.setExtraHTTPHeaders({
+      'Accept-Language': '*',
       'Accept': '*/*',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Connection': 'keep-alive'
+      'Accept-Encoding': '',
+      'Connection': 'keep-alive',
+      'Referer': url,  // Set initial referer, some hosting return 403 if not set
     });
 
     // Add these before making requests
