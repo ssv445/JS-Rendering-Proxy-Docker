@@ -35,12 +35,32 @@ const CLEANUP_CHROME_PROCESS_INTERVAL = process.env.CLEANUP_CHROME_PROCESS_INTER
 const CHROME_CACHE_SIZE = process.env.CHROME_CACHE_SIZE || (100 * 1024 * 1024).toString(); // 100MB default
 const CHROME_MEDIA_CACHE_SIZE = process.env.CHROME_MEDIA_CACHE_SIZE || (100 * 1024 * 1024).toString();
 
-function isUnderPressure() {
+
+/** we calculate CPU usage for last 10 seconds , and then we calculate the average */
+let CpuUsage = [];
+const CPU_USAGE_SAMPLE_SIZE = process.env.CPU_USAGE_SAMPLE_SIZE || 10;
+
+function calculateAverageCpuUsage() {
   const { cpuUsage, cpuCount, isError } = getCPUUsage();
   if (isError) {
     return false;
   }
-  return (cpuUsage / cpuCount) > MAX_CPU_UTILIZATION_LIMIT;
+  CpuUsage.push(cpuUsage / cpuCount);
+  while (CpuUsage.length > CPU_USAGE_SAMPLE_SIZE) {
+    CpuUsage.shift();
+  }
+  return CpuUsage.reduce((a, b) => a + b, 0) / CpuUsage.length;
+
+}
+setInterval(calculateAverageCpuUsage, 1000);
+
+
+function isUnderPressure() {
+  const averageCpuUsage = calculateAverageCpuUsage();
+  if (averageCpuUsage === false) {
+    return false;
+  }
+  return averageCpuUsage > MAX_CPU_UTILIZATION_LIMIT;
 }
 
 // Essential flags
@@ -578,7 +598,7 @@ let activeRequests = 0;
 let totalRequests = 0;
 
 fastify.addHook('onRequest', (request, reply, done) => {
-  console.log('CPU Usage:', (getCPUUsage().cpuUsage / getCPUUsage().cpuCount).toFixed(2) + '%');
+  console.log('CPU Usage:', calculateAverageCpuUsage().toFixed(2) + '%');
   if (isUnderPressure()) {
     return reply.status(503).send({
       error: 'Service Unavailable',
